@@ -20,20 +20,26 @@ struct Particle {
 fn main() {
     let mut window = Window::new("Kiss3d: cube");
     window.set_light(Light::StickToCamera);
-    const NUM_PARTICLES: usize = 10;
+    const NUM_PARTICLES: usize = 20;
     let (mut window, mut particles) = create_particles(NUM_PARTICLES, window);
 
     let mut rng = rand::thread_rng();
     for particle in &mut particles {
-        let x: f32 = rng.gen_range(0.0..=100.0); // generates a float between 0 and 10
-        let y: f32 = rng.gen_range(0.0..=100.0); // generates a float between 0 and 10
-        let z: f32 = rng.gen_range(0.0..=100.0); // generates a float between
+        let x: f32 = rng.gen_range(-10.0..=100.0); // generates a float between 0 and 10
+        let y: f32 = rng.gen_range(-10.0..=100.0); // generates a float between 0 and 10
+        let z: f32 = rng.gen_range(-10.0..=100.0); // generates a float between
         let px: f32 = rng.gen_range(5.0..=10.0); // generates a float between 0 and 10
         let py: f32 = rng.gen_range(5.0..=10.0); // generates a float between 0 and 10
         let pz: f32 = rng.gen_range(5.0..=10.0); // generates a float between
         translate(particle, x, y, z); // adds translation
         particle.momentum = Vector3::new(px, py, pz);
     }
+
+    // Two particle for testing
+    // translate(&mut particles[0], 0.0, 4.0, 0.0);
+    // translate(&mut particles[1], 0.0, -4.0, 0.0);
+    // particles[0].momentum = Vector3::new(0.0, 0.0, 0.0);
+    // particles[1].momentum = Vector3::new(0.0, 1.5, 0.0);
 
     const DT: f32 = 0.01;
     // const DT: f32 = 1.0;
@@ -64,6 +70,12 @@ fn main() {
                         let dp = force * DT;
                         dps[i] += dp;
                         dps[j] -= dp;
+
+                        if are_colliding(particle1, particle2) {
+                            let dp = calc_collision_imp(particle1, particle2);
+                            dps[i] += dp;
+                            dps[j] -= dp;
+                        }
                     }
                 }
             }
@@ -125,7 +137,7 @@ fn create_particles(num_p: usize, mut window: Window) -> (Window, Vec<Particle>)
 }
 fn grav_force(particle1: &Particle, particle2: &Particle) -> Vector3<f32> {
     // Gmm/r^2
-    const G: f32 = 1000.0;
+    const G: f32 = 100.0;
     let r = particle2.pos - particle1.pos;
     let distance = r.norm();
 
@@ -134,4 +146,32 @@ fn grav_force(particle1: &Particle, particle2: &Particle) -> Vector3<f32> {
     const K: f32 = 0.5;
     let dampen_force = (1.0 / (1.0 + K * distance)) * force;
     rhat * (force - dampen_force)
+}
+
+fn are_colliding(particle1: &Particle, particle2: &Particle) -> bool {
+    let sum_r = particle1.radius + particle2.radius;
+    let distance = (particle2.pos - particle1.pos).norm();
+    distance < sum_r
+}
+
+fn calc_collision_imp(particle1: &Particle, particle2: &Particle) -> Vector3<f32> {
+    let m1 = particle1.mass;
+    let m2 = particle2.mass;
+
+    let v1 = particle1.momentum / m1;
+    let v2 = particle2.momentum / m2;
+
+    // Calculate norm vector for collision
+    let r = particle2.pos - particle1.pos;
+    let col_vec = r / r.norm();
+
+    // Coef of restitution
+    const EPS: f32 = 0.98;
+
+    let m_reduced = 1.0 / ((1.0 / m1) + (1.0 / m2));
+    let rel_vel = v2 - v1;
+    let impact_v = col_vec.dot(&rel_vel); // comp of velocity in collision direction
+
+    let imp = (1.0 + EPS) * m_reduced * impact_v; // impulse of collision
+    col_vec * imp // Orient in direction of collision
 }
