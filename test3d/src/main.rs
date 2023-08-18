@@ -1,8 +1,6 @@
 extern crate kiss3d;
 
-use itertools::{enumerate, Itertools, Permutations};
 use kiss3d::light::Light;
-use kiss3d::nalgebra::vector;
 use kiss3d::nalgebra::{Translation3, Vector3};
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
@@ -34,13 +32,13 @@ fn main() {
         let py: f32 = rng.gen_range(5.0..=10.0); // generates a float between 0 and 10
         let pz: f32 = rng.gen_range(5.0..=10.0); // generates a float between
         translate(particle, x, y, z); // adds translation
-        particle.momentum = Vector3::new(0.0 * px, 0.0 * py, 0.0 * pz);
+        particle.momentum = Vector3::new(px, py, pz);
     }
 
-    const dt: f32 = 0.01;
-    // const dt: f32 = 1.0;
-    const iters_per_sec: f32 = 60.0;
-    let time_interval = Duration::from_secs_f32(1.0 / iters_per_sec);
+    const DT: f32 = 0.01;
+    // const DT: f32 = 1.0;
+    const ITERS_PER_SEC: f32 = 60.0;
+    let time_interval = Duration::from_secs_f32(1.0 / ITERS_PER_SEC);
 
     let mut previous_time = Instant::now();
     let mut accumulator: Duration = Duration::from_millis(0);
@@ -63,7 +61,7 @@ fn main() {
                         let particle1 = &particles[i];
                         let particle2 = &particles[j];
                         let force = grav_force(particle1, particle2);
-                        let dp = force * dt;
+                        let dp = force * DT;
                         dps[i] += dp;
                         dps[j] -= dp;
                     }
@@ -74,7 +72,7 @@ fn main() {
                 let particle = &mut particles[i];
                 let imp = dps[i];
                 particle.momentum += imp;
-                let dr = (particle.momentum / particle.mass) * dt;
+                let dr = (particle.momentum / particle.mass) * DT;
                 // println!("{}", dr);
                 translate(particle, dr.x, dr.y, dr.z);
             }
