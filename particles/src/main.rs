@@ -16,10 +16,12 @@ use std::time::{Duration, Instant};
 mod physics;
 use physics::{are_colliding, calc_collision_imp, grav_force, translate, Particle};
 
+use crate::physics::electric_force;
+
 fn main() {
     let mut window = Window::new("Kiss3d: cube");
     window.set_light(Light::StickToCamera);
-    const NUM_PARTICLES: usize = 2;
+    const NUM_PARTICLES: usize = 20;
     let (mut window, mut particles) = create_particles(NUM_PARTICLES, window);
 
     let mut rng = rand::thread_rng();
@@ -31,7 +33,8 @@ fn main() {
         let py: f32 = rng.gen_range(-10.0..=10.0); // generates a float between 0 and 10
         let pz: f32 = rng.gen_range(-10.0..=10.0); // generates a float between
         translate(particle, x, y, z); // adds translation
-        particle.momentum = Vector3::new(0.0 * px, 0.0 * py, 0.0 * pz);
+        particle.momentum = Vector3::new(px, py, pz);
+        particle.charge = rng.gen_range(-1.0..=1.0); // me when random decimal charge
     }
 
     // Two particle for testing
@@ -39,6 +42,10 @@ fn main() {
     // translate(&mut particles[1], 0.0, -4.0, 0.0);
     // particles[0].momentum = Vector3::new(0.0, 0.0, 0.0);
     // particles[1].momentum = Vector3::new(0.0, 1.5, 0.0);
+
+    // Testing for e force
+    // particles[0].charge = -1.0;
+    // particles[1].charge = -1.0;
 
     const DT: f32 = 0.01;
     // const DT: f32 = 1.0;
@@ -65,10 +72,16 @@ fn main() {
                         // Not the same particle
                         let particle1 = &particles[i];
                         let particle2 = &particles[j];
-                        let force = grav_force(particle1, particle2);
-                        let dp = force * DT;
-                        dps[i] += dp;
-                        dps[j] -= dp;
+
+                        let grav_force = grav_force(particle1, particle2);
+                        let g_dp = grav_force * DT;
+                        dps[i] += g_dp;
+                        dps[j] -= g_dp;
+
+                        let electric_force = electric_force(particle1, particle2);
+                        let e_dp = electric_force * DT;
+                        dps[i] += e_dp;
+                        dps[j] -= g_dp;
 
                         if are_colliding(particle1, particle2) {
                             let dp = calc_collision_imp(particle1, particle2);
@@ -110,7 +123,7 @@ fn particle(sphere: SceneNode, pos: (f32, f32, f32), mom: (f32, f32, f32), mass:
         momentum: momentum,
         mass: mass,
         radius: 1.0,
-        charge: 0.0,
+        charge: 1.0,
     }
 }
 
