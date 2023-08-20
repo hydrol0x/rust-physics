@@ -1,8 +1,7 @@
 extern crate kiss3d;
 
-use kiss3d::camera::FirstPerson;
 use kiss3d::light::Light;
-use kiss3d::nalgebra::{Point3, Translation3, Vector3};
+use kiss3d::nalgebra::Vector3;
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
 use rand::prelude::*;
@@ -13,21 +12,14 @@ use std::time::{Duration, Instant};
 // TODO: add electric force
 
 // mod physics;
-struct Particle {
-    sphere: SceneNode,
-    pos: Vector3<f32>,
-    momentum: Vector3<f32>,
-    mass: f32,
-    radius: f32,
-}
+
+mod physics;
+use physics::{are_colliding, calc_collision_imp, grav_force, translate, Particle};
 
 fn main() {
     let mut window = Window::new("Kiss3d: cube");
-    let eye = Point3::new(10.0f32, 10.0, 10.0);
-    let at = Point3::origin();
-    let mut first_person = FirstPerson::new(eye, at);
     window.set_light(Light::StickToCamera);
-    const NUM_PARTICLES: usize = 20;
+    const NUM_PARTICLES: usize = 2;
     let (mut window, mut particles) = create_particles(NUM_PARTICLES, window);
 
     let mut rng = rand::thread_rng();
@@ -35,11 +27,11 @@ fn main() {
         let x: f32 = rng.gen_range(-10.0..=100.0); // generates a float between 0 and 10
         let y: f32 = rng.gen_range(-10.0..=100.0); // generates a float between 0 and 10
         let z: f32 = rng.gen_range(-10.0..=100.0); // generates a float between
-        let px: f32 = rng.gen_range(5.0..=10.0); // generates a float between 0 and 10
-        let py: f32 = rng.gen_range(5.0..=10.0); // generates a float between 0 and 10
-        let pz: f32 = rng.gen_range(5.0..=10.0); // generates a float between
+        let px: f32 = rng.gen_range(-10.0..=10.0); // generates a float between 0 and 10
+        let py: f32 = rng.gen_range(-10.0..=10.0); // generates a float between 0 and 10
+        let pz: f32 = rng.gen_range(-10.0..=10.0); // generates a float between
         translate(particle, x, y, z); // adds translation
-        particle.momentum = Vector3::new(px, py, pz);
+        particle.momentum = Vector3::new(0.0 * px, 0.0 * py, 0.0 * pz);
     }
 
     // Two particle for testing
@@ -109,18 +101,6 @@ fn main() {
     }
 }
 
-fn translate(particle: &mut Particle, x: f32, y: f32, z: f32) {
-    // TODO: change name of function to add_translation or something and or
-    //  Make this a function that just translates to a position x,y,z
-    // and a separet functin add_translation that wraps around
-    // particle.pos = Vector3::new(x, y, z);
-    particle.pos.x += x;
-    particle.pos.y += y;
-    particle.pos.z += z;
-    let t = Translation3::new(x, y, z);
-    particle.sphere.append_translation(&t);
-}
-
 fn particle(sphere: SceneNode, pos: (f32, f32, f32), mom: (f32, f32, f32), mass: f32) -> Particle {
     let position: Vector3<f32> = Vector3::new(pos.0, pos.1, pos.2);
     let momentum: Vector3<f32> = Vector3::new(mom.0, mom.1, mom.2);
@@ -130,6 +110,7 @@ fn particle(sphere: SceneNode, pos: (f32, f32, f32), mom: (f32, f32, f32), mass:
         momentum: momentum,
         mass: mass,
         radius: 1.0,
+        charge: 0.0,
     }
 }
 
@@ -145,45 +126,4 @@ fn create_particles(num_p: usize, mut window: Window) -> (Window, Vec<Particle>)
         println!("Created particle {}", i);
     }
     (window, particles)
-}
-
-fn grav_force(particle1: &Particle, particle2: &Particle) -> Vector3<f32> {
-    // Gmm/r^2
-    const G: f32 = 100.0;
-    let r = particle2.pos - particle1.pos;
-    let distance = r.norm();
-
-    let rhat = r / r.norm(); // Orient the force vector
-    let force = (G * particle1.mass * particle2.mass) / f32::powf(r.norm(), 2.0);
-    const K: f32 = 0.5;
-    let dampen_force = (1.0 / (1.0 + K * distance)) * force;
-    rhat * (force - dampen_force)
-}
-
-fn are_colliding(particle1: &Particle, particle2: &Particle) -> bool {
-    let sum_r = particle1.radius + particle2.radius;
-    let distance = (particle2.pos - particle1.pos).norm();
-    distance < sum_r
-}
-
-fn calc_collision_imp(particle1: &Particle, particle2: &Particle) -> Vector3<f32> {
-    let m1 = particle1.mass;
-    let m2 = particle2.mass;
-
-    let v1 = particle1.momentum / m1;
-    let v2 = particle2.momentum / m2;
-
-    // Calculate norm vector for collision
-    let r = particle2.pos - particle1.pos;
-    let col_vec = r / r.norm();
-
-    // Coef of restitution
-    const EPS: f32 = 0.98;
-
-    let m_reduced = 1.0 / ((1.0 / m1) + (1.0 / m2));
-    let rel_vel = v2 - v1;
-    let impact_v = col_vec.dot(&rel_vel); // comp of velocity in collision direction
-
-    let imp = (1.0 + EPS) * m_reduced * impact_v; // impulse of collision
-    col_vec * imp // Orient in direction of collision
 }
