@@ -1,14 +1,18 @@
 extern crate kiss3d;
 
+use kiss3d::camera::FirstPerson;
 use kiss3d::light::Light;
-use kiss3d::nalgebra::{Translation3, Vector3};
+use kiss3d::nalgebra::{Point3, Translation3, Vector3};
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
 use rand::prelude::*;
-use std::cmp;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+// TODO:  import all physics functons from physics.rs instead of in this file.
+// TODO: add electric force
+
+// mod physics;
 struct Particle {
     sphere: SceneNode,
     pos: Vector3<f32>,
@@ -19,6 +23,9 @@ struct Particle {
 
 fn main() {
     let mut window = Window::new("Kiss3d: cube");
+    let eye = Point3::new(10.0f32, 10.0, 10.0);
+    let at = Point3::origin();
+    let mut first_person = FirstPerson::new(eye, at);
     window.set_light(Light::StickToCamera);
     const NUM_PARTICLES: usize = 20;
     let (mut window, mut particles) = create_particles(NUM_PARTICLES, window);
@@ -91,10 +98,14 @@ fn main() {
 
             accumulator -= time_interval;
         }
-        sleep(cmp::max(
-            Duration::from_secs(0),
-            time_interval - (Instant::now() - current_time),
-        ));
+
+        let sleep_duration = if time_interval > (Instant::now() - current_time) {
+            time_interval - (Instant::now() - current_time)
+        } else {
+            Duration::from_secs(0)
+        };
+
+        sleep(sleep_duration);
     }
 }
 
@@ -135,6 +146,7 @@ fn create_particles(num_p: usize, mut window: Window) -> (Window, Vec<Particle>)
     }
     (window, particles)
 }
+
 fn grav_force(particle1: &Particle, particle2: &Particle) -> Vector3<f32> {
     // Gmm/r^2
     const G: f32 = 100.0;
