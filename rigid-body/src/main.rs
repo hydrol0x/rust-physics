@@ -1,7 +1,5 @@
 use kiss3d::light::Light;
-use kiss3d::nalgebra::{Point, Point2, Point3, Translation2, Translation3, Vector, Vector3};
-use kiss3d::scene::{self, PlanarSceneNode, SceneNode};
-use kiss3d::window::{self, Window};
+use kiss3d::window::Window;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -10,16 +8,18 @@ use spring::default_spring;
 use spring::new_spring;
 use spring::Spring;
 
-const dt: f32 = 0.001;
+const dt: f32 = 0.00001;
 
 fn main() {
     let mut window = Window::new("Kiss3d: cube");
     window.set_light(Light::StickToCamera);
 
-    let mut spring = Spring::new_default_spring(&mut window);
-    spring.pos_2 = Vector3::new(-10.0, 0.0, 0.0);
-
-    println!("Zeta: {}", spring.zeta());
+    let mut springs: Vec<Spring> = vec![
+        Spring::new_default_spring(&mut window),
+        Spring::new_default_spring(&mut window),
+    ];
+    springs[0].length = 2.0;
+    springs[1].length = 5.0;
 
     const ITERS_PER_SEC: f32 = 60.0;
     let time_interval = Duration::from_secs_f32(1.0 / ITERS_PER_SEC);
@@ -36,7 +36,9 @@ fn main() {
 
         while accumulator >= time_interval {
             // DO physics calculations
-            spring.step_spring(dt, &mut window);
+            for spring in &mut springs {
+                spring.step_spring(dt, &mut window);
+            }
 
             accumulator -= time_interval;
         }
