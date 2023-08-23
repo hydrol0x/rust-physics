@@ -126,54 +126,6 @@ impl Spring {
     }
 }
 
-// TODO: maybe make below methods
-pub fn new_spring(
-    mass_1: SceneNode,
-    mass_2: SceneNode,
-    stiffness: f32,
-    length: f32,
-    pos_1: Vector3<f32>,
-    pos_2: Vector3<f32>,
-    vel_1: Vector3<f32>,
-    vel_2: Vector3<f32>,
-    mass: f32,
-    dampen: f32,
-) -> Spring {
-    Spring {
-        mass_1_block: mass_1,
-        mass_2_block: mass_2,
-        stiffness: stiffness,
-        length: length,
-        pos_1: pos_1,
-        pos_2: pos_2,
-        vel_1: vel_1,
-        vel_2: vel_2,
-        mass: mass,
-        dampen: dampen,
-    }
-}
-
-pub fn default_spring(window: &mut Window) -> Spring {
-    let mass_1_block = window.add_cube(0.5, 0.5, 0.5);
-    let mass_2_block = window.add_cube(0.5, 0.5, 0.5);
-    let pos_1 = Vector3::new(-5.0, 0.0, 0.0);
-    let pos_2 = Vector3::new(5.0, 0.0, 0.0);
-    let vel_1 = Vector3::new(0.0, 0.0, 0.0);
-    let vel_2 = Vector3::new(0.0, 0.0, 0.0);
-    new_spring(
-        mass_1_block,
-        mass_2_block,
-        10.0,
-        10.0,
-        pos_1,
-        pos_2,
-        vel_1,
-        vel_2,
-        10.0,
-        100.0,
-    )
-}
-
 // helper functions for translation
 fn translate(object: &mut SceneNode, x: f32, y: f32, z: f32) {
     let t = Translation3::new(x, y, z);

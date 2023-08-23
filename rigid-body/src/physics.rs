@@ -1,5 +1,5 @@
 use kiss3d::window::Window;
-use std::thread::{current, sleep};
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 // TODO: make this a struct so that
@@ -10,14 +10,14 @@ use std::time::{Duration, Instant};
 // can be run only once on init
 // and not every time loop runs
 
-pub struct discrete_time_step_sim {
+pub struct DiscreteTimeStepSim {
     previous_time: Instant,
     time_interval: Duration,
     accumulator: Duration,
 }
 
 // pub type PhysicsFunction<T, U> = Fn(&mut T, &mut U);
-impl discrete_time_step_sim {
+impl DiscreteTimeStepSim {
     pub fn new(previous_time: Instant, time_interval: Duration, accumulator: Duration) -> Self {
         Self {
             previous_time: previous_time,
@@ -52,34 +52,3 @@ impl discrete_time_step_sim {
         sleep(sleep_duration);
     }
 }
-
-// pub fn discrete_time_step_sim<F>(
-//     mut physics_calc: F,
-//     springs: &mut Vec<Spring>,
-//     window: &mut Window,
-//     mut previous_time: Instant,
-//     mut time_interval: Duration,
-//     mut accumulator: Duration,
-// ) where
-//     F: FnMut(),
-// {
-//     let current_time = Instant::now();
-//     let elapsed_time = current_time - previous_time;
-//     previous_time = current_time;
-
-//     accumulator += elapsed_time;
-
-//     while accumulator >= time_interval {
-//         physics_calc();
-
-//         accumulator -= time_interval;
-//     }
-
-//     let sleep_duration = if time_interval > (Instant::now() - current_time) {
-//         time_interval - (Instant::now() - current_time)
-//     } else {
-//         Duration::from_secs(0)
-//     };
-
-//     sleep(sleep_duration);
-// }
