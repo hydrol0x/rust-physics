@@ -1,5 +1,5 @@
-use kiss3d::light::Light;
 use kiss3d::window::Window;
+use kiss3d::{light::Light, nalgebra::Vector3};
 use std::time::{Duration, Instant};
 
 // Spring type
@@ -20,14 +20,15 @@ fn main() {
         Spring::new_default_spring(&mut window),
         // Spring::new_default_spring(&mut window),
     ];
-    springs[0].length = 9.5;
-    springs[0].dampen = 10.0;
+    springs[0].length = 9.8;
+    springs[0].dampen = 1.0;
     springs[0].stiffness = 1000000.0;
+    println!("zeta {}", springs[0].zeta());
 
     // springs[1].length = 9.8;
 
     // Initializes the physics runner
-    const ITERS_PER_SEC: f32 = 60.0;
+    const ITERS_PER_SEC: f32 = 120.0;
     let previous_time = Instant::now();
     let time_interval = Duration::from_secs_f32(1.0 / ITERS_PER_SEC);
     let accumulator = Duration::new(0, 0);
@@ -37,6 +38,7 @@ fn main() {
     fn physics_calc(springs: &mut Vec<Spring>, window: &mut Window) {
         for spring in springs {
             spring.step_spring(DT, window);
+            // spring.print();
         }
     }
 

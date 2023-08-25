@@ -1,20 +1,28 @@
-use kiss3d::nalgebra::{Point3, Translation3, Vector3};
+use kiss3d::nalgebra::{Point3, Translation3, Vector, Vector3};
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
 
 // Defines spring type
 // how to make a nuclear bomb: obtain ~1500kgs of uranium from ebay, enrich it, then make a dmeon core :D
+
+// Todo: make the coupled list be a list of SpringNodes so that I don't have to keep track of which end is coupeld with which other
+pub struct SpringNode {
+    pub pos: Vector3<f32>,
+    pub vel: Vector3<f32>,
+    pub force: Vector3<f32>,
+    pub mass: f32,
+}
+
 pub struct Spring {
-    pub mass_1_block: SceneNode,
-    pub mass_2_block: SceneNode,
-    pub stiffness: f32, // Spring constant
+    pub node_1: SpringNode,
+    pub node_2: SpringNode,
+    pub node_1_block: SceneNode,
+    pub node_2_block: SceneNode,
+    pub stiffness: f32,
+    pub dampen: f32,
     pub length: f32,
-    pub pos_1: Vector3<f32>, // first end of spring position
-    pub pos_2: Vector3<f32>, // second end of spring position
-    pub vel_1: Vector3<f32>,
-    pub vel_2: Vector3<f32>,
-    pub mass: f32,   // mass of both ends for now
-    pub dampen: f32, // damp factor, c in the equation F_damp = c*v
+    pub coupled_1: Vec<SpringNode>,
+    pub coupled_2: Vec<SpringNode>,
 }
 
 impl Spring {
@@ -29,21 +37,34 @@ impl Spring {
         mass: f32,
         dampen: f32,
     ) -> Self {
-        let mut mass_1_block = window.add_cube(0.5, 0.5, 0.5);
-        let mut mass_2_block = window.add_cube(0.5, 0.5, 0.5);
-        translate_to(&mut mass_1_block, pos_1.x, pos_1.y, pos_1.z);
-        translate_to(&mut mass_2_block, pos_2.x, pos_2.y, pos_2.z);
-        Self {
-            mass_1_block: mass_1_block,
-            mass_2_block: mass_2_block,
-            stiffness: stiffness,
-            length: length,
-            pos_1: pos_1,
-            pos_2: pos_2,
-            vel_1: vel_1,
-            vel_2: vel_2,
+        let mut node_1_block = window.add_cube(0.5, 0.5, 0.5);
+        let mut node_2_block = window.add_cube(0.5, 0.5, 0.5);
+        translate_to(&mut node_1_block, pos_1.x, pos_1.y, pos_1.z);
+        translate_to(&mut node_2_block, pos_2.x, pos_2.y, pos_2.z);
+        let node_1 = SpringNode {
+            pos: pos_1,
+            vel: vel_1,
+            force: Vector3::new(0.0, 0.0, 0.0),
             mass: mass,
+        };
+
+        let node_2 = SpringNode {
+            pos: pos_2,
+            vel: vel_2,
+            force: Vector3::new(0.0, 0.0, 0.0),
+            mass: mass,
+        };
+
+        Self {
+            node_1: node_1,
+            node_2: node_2,
+            node_1_block: node_1_block,
+            node_2_block: node_2_block,
+            stiffness: stiffness,
             dampen: dampen,
+            length: length,
+            coupled_1: Vec::new(),
+            coupled_2: Vec::new(),
         }
     }
 
@@ -59,6 +80,17 @@ impl Spring {
         let default_mass = 1.0;
         let default_dampen = 10.0;
 
+        println!(
+            "Initialized Spring with stiff:{}, len:{}, pos1:{}, pos2:{}, vel1:{}, vel2:{}, mass:{}, damp:{}",
+            default_stiffness,
+            default_length,
+            pos_1,
+            pos_2,
+            vel_1,
+            vel_2,
+            default_mass,
+            default_dampen
+        );
         Self::new(
             window,
             default_stiffness,
@@ -72,49 +104,81 @@ impl Spring {
         )
     }
 
-    fn force(&self) -> Vector3<f32> {
+    fn update_force(&mut self) {
         // F = -*stiffness*x
-        let r_hat = (self.pos_2 - self.pos_1) * (self.pos_2 - self.pos_1).norm();
-        let dx = (self.pos_2 - self.pos_1).norm() - self.length;
+        let node_1 = &mut self.node_1;
+        let node_2 = &mut self.node_2;
+
+        let r_hat = (node_2.pos - node_1.pos) / (node_2.pos - node_1.pos).norm();
+        let dx = (node_2.pos - node_1.pos).norm() - self.length;
         // Fdamp = F=c*v
-        let damping_force = self.dampen * (self.vel_1.norm() + self.vel_2.norm()) * r_hat;
-        -(self.stiffness * dx * r_hat) - damping_force
+        let damping_force = self.dampen * (node_1.vel.norm() + node_2.vel.norm()) * r_hat;
+        let force = -(self.stiffness * dx * r_hat) - damping_force;
+        // println!("dx {}", dx);
+        // println!("force mag {}", force);
+        // println!("damp force mag {}", damping_force);
+        // println!("r_hat {}", r_hat);
+        node_1.force = -force;
+        node_2.force = force;
+    }
+
+    // List of SpringNodes == automatically keeps track of which connected to which
+    fn coupling_force(&self) /*-> Vector3<f32>*/
+    {
+        let mut force_1: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
+        let mut force_2: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
+        for spring_node in &self.coupled_1 {
+            force_1 += spring_node.force;
+        }
+        for spring_node in &self.coupled_1 {
+            force_1 += spring_node.force;
+        }
     }
 
     fn update_vel(&mut self, dt: f32) {
-        let force = self.force();
-        let dp = force * dt;
-        let dv = dp / self.mass;
-        self.vel_1 -= dv;
-        self.vel_2 += dv;
+        self.update_force();
+        let node_1 = &mut self.node_1;
+        let node_2 = &mut self.node_2;
+        let dp_1 = node_1.force * dt;
+        let dp_2 = node_2.force * dt;
+        let dv_1 = dp_1 / node_1.mass;
+        let dv_2 = dp_2 / node_2.mass;
+        node_1.vel += dv_1;
+        node_2.vel += dv_2;
     }
 
     fn update_pos(&mut self, dt: f32) {
-        self.pos_1 += self.vel_1 * dt;
-        self.pos_2 += self.vel_2 * dt;
+        let node_1 = &mut self.node_1;
+        let node_2 = &mut self.node_2;
+        node_1.pos += node_1.vel * dt;
+        node_2.pos += node_2.vel * dt;
     }
 
     pub fn step_spring(&mut self, dt: f32, window: &mut Window) {
         self.update_pos(dt);
         self.update_vel(dt);
         self.draw_spring(window);
+        let node_1 = &mut self.node_1;
+        let node_2 = &mut self.node_2;
         translate_to(
-            &mut self.mass_1_block,
-            self.pos_1.x,
-            self.pos_1.y,
-            self.pos_1.z,
+            &mut self.node_1_block,
+            node_1.pos.x,
+            node_1.pos.y,
+            node_1.pos.z,
         );
         translate_to(
-            &mut self.mass_2_block,
-            self.pos_2.x,
-            self.pos_2.y,
-            self.pos_2.z,
+            &mut self.node_2_block,
+            node_2.pos.x,
+            node_2.pos.y,
+            node_2.pos.z,
         );
     }
 
     fn draw_spring(&self, window: &mut Window) {
-        let a = Point3::new(self.pos_1.x, self.pos_1.y, self.pos_1.z);
-        let b = Point3::new(self.pos_2.x, self.pos_2.y, self.pos_2.z);
+        let node_1 = &self.node_1;
+        let node_2 = &self.node_2;
+        let a = Point3::new(node_1.pos.x, node_1.pos.y, node_1.pos.z);
+        let b = Point3::new(node_2.pos.x, node_2.pos.y, node_2.pos.z);
         let color = Point3::new(1.0, 1.0, 1.0);
         window.set_line_width(2.0);
 
@@ -122,7 +186,42 @@ impl Spring {
     }
 
     pub fn zeta(&self) -> f32 {
-        self.dampen / (2.0 * f32::sqrt(self.mass * self.stiffness))
+        self.dampen / (2.0 * f32::sqrt(self.node_1.mass * self.stiffness))
+    }
+
+    pub fn print(&self) {
+        println!(
+            "\n
+            Node1: {{\n
+                pos:   {},\n
+                vel:   {},\n
+                force: {},\n
+                mass:  {},\n 
+            \n}}\n\n
+            Node2: {{
+                pos:   {},\n
+                vel:   {},\n
+                force: {},\n
+                mass:  {},\n
+            }}\n\n
+            Spring: {{
+                stiffness: {},\n
+                dampen: {},\n
+                length: {},\n
+            }}
+        \n",
+            self.node_1.pos,
+            self.node_1.vel,
+            self.node_1.force,
+            self.node_1.mass,
+            self.node_2.pos,
+            self.node_2.vel,
+            self.node_2.force,
+            self.node_2.mass,
+            self.stiffness,
+            self.dampen,
+            self.length
+        );
     }
 }
 
