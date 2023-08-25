@@ -6,26 +6,32 @@ use kiss3d::window::Window;
 // how to make a nuclear bomb: obtain ~1500kgs of uranium from ebay, enrich it, then make a dmeon core :D
 
 // Todo: make the coupled list be a list of SpringNodes so that I don't have to keep track of which end is coupeld with which other
-pub struct SpringNode {
+pub struct SpringNode<'a> {
     pub pos: Vector3<f32>,
     pub vel: Vector3<f32>,
     pub force: Vector3<f32>,
+    pub coupled: Vec<&'a mut SpringNode<'a>>,
     pub mass: f32,
 }
 
-pub struct Spring {
-    pub node_1: SpringNode,
-    pub node_2: SpringNode,
+impl<'a> SpringNode<'a> {
+    pub fn couple(&mut self, node: &'a mut SpringNode<'a>) {
+        self.coupled.push(node);
+    }
+}
+// TODO: put spring block into springNode so that their position can be updated in step_spring
+
+pub struct Spring<'a> {
+    pub node_1: SpringNode<'a>,
+    pub node_2: SpringNode<'a>,
     pub node_1_block: SceneNode,
     pub node_2_block: SceneNode,
     pub stiffness: f32,
     pub dampen: f32,
     pub length: f32,
-    pub coupled_1: Vec<SpringNode>,
-    pub coupled_2: Vec<SpringNode>,
 }
 
-impl Spring {
+impl<'a> Spring<'a> {
     pub fn new(
         window: &mut Window,
         stiffness: f32,
@@ -46,6 +52,7 @@ impl Spring {
             vel: vel_1,
             force: Vector3::new(0.0, 0.0, 0.0),
             mass: mass,
+            coupled: Vec::new(),
         };
 
         let node_2 = SpringNode {
@@ -53,6 +60,7 @@ impl Spring {
             vel: vel_2,
             force: Vector3::new(0.0, 0.0, 0.0),
             mass: mass,
+            coupled: Vec::new(),
         };
 
         Self {
@@ -63,8 +71,6 @@ impl Spring {
             stiffness: stiffness,
             dampen: dampen,
             length: length,
-            coupled_1: Vec::new(),
-            coupled_2: Vec::new(),
         }
     }
 
@@ -75,7 +81,7 @@ impl Spring {
         let vel_2 = Vector3::new(0.0, 0.0, 0.0);
 
         // Default values for stiffness, length, mass, and dampen
-        let default_stiffness = 100.0;
+        let default_stiffness = 10000.0;
         let default_length = 10.0;
         let default_mass = 1.0;
         let default_dampen = 10.0;
@@ -104,7 +110,7 @@ impl Spring {
         )
     }
 
-    fn update_force(&mut self) {
+    fn spring_force(&mut self) {
         // F = -*stiffness*x
         let node_1 = &mut self.node_1;
         let node_2 = &mut self.node_2;
@@ -123,20 +129,24 @@ impl Spring {
     }
 
     // List of SpringNodes == automatically keeps track of which connected to which
-    fn coupling_force(&self) /*-> Vector3<f32>*/
+    fn coupling_force(&mut self) /*-> Vector3<f32>*/
     {
         let mut force_1: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
         let mut force_2: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
-        for spring_node in &self.coupled_1 {
+        for spring_node in &self.node_1.coupled {
             force_1 += spring_node.force;
         }
-        for spring_node in &self.coupled_1 {
-            force_1 += spring_node.force;
+        for spring_node in &self.node_2.coupled {
+            force_2 += spring_node.force;
         }
+        self.node_1.force += force_1;
+        self.node_2.force += force_2;
     }
 
     fn update_vel(&mut self, dt: f32) {
-        self.update_force();
+        self.spring_force();
+        self.coupling_force();
+        self.coupling_force();
         let node_1 = &mut self.node_1;
         let node_2 = &mut self.node_2;
         let dp_1 = node_1.force * dt;
@@ -172,6 +182,9 @@ impl Spring {
             node_2.pos.y,
             node_2.pos.z,
         );
+        // for spring_node in self.node_1.coupled {
+        //     spring_node.node_block
+        // }
     }
 
     fn draw_spring(&self, window: &mut Window) {

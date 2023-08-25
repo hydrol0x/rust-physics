@@ -17,13 +17,24 @@ fn main() {
     window.set_light(Light::StickToCamera);
 
     let mut springs: Vec<Spring> = vec![
-        Spring::new_default_spring(&mut window),
+        // Spring::new_default_spring(&mut window),
         // Spring::new_default_spring(&mut window),
     ];
-    springs[0].length = 9.8;
-    springs[0].dampen = 1.0;
-    springs[0].stiffness = 1000000.0;
-    println!("zeta {}", springs[0].zeta());
+    // springs[0].length = 9.8;
+    // springs[0].dampen = 1.0;
+    // springs[0].stiffness = 1000000.0;
+    // println!("zeta {}", springs[0].zeta());
+
+    let mut spring_1 = Spring::new_default_spring(&mut window);
+    let mut spring_2 = Spring::new_default_spring(&mut window);
+    spring_1.node_1.pos = Vector3::new(1.0, 1.0, 1.0);
+    spring_1.node_2.pos = Vector3::new(11.5, 1.0, 1.0);
+    spring_2.node_1.pos = Vector3::new(1.0, 1.0, 1.0);
+    spring_2.node_2.pos = Vector3::new(1.0, 11.0, 1.0);
+
+    println!("{}", spring_1.zeta());
+    springs.push(spring_1);
+    springs.push(spring_2);
 
     // springs[1].length = 9.8;
 
