@@ -11,6 +11,7 @@ pub struct SpringNode<'a> {
     pub vel: Vector3<f32>,
     pub force: Vector3<f32>,
     pub coupled: Vec<&'a mut SpringNode<'a>>,
+    pub block: SceneNode,
     pub mass: f32,
 }
 
@@ -24,8 +25,6 @@ impl<'a> SpringNode<'a> {
 pub struct Spring<'a> {
     pub node_1: SpringNode<'a>,
     pub node_2: SpringNode<'a>,
-    pub node_1_block: SceneNode,
-    pub node_2_block: SceneNode,
     pub stiffness: f32,
     pub dampen: f32,
     pub length: f32,
@@ -48,6 +47,7 @@ impl<'a> Spring<'a> {
         translate_to(&mut node_1_block, pos_1.x, pos_1.y, pos_1.z);
         translate_to(&mut node_2_block, pos_2.x, pos_2.y, pos_2.z);
         let node_1 = SpringNode {
+            block: node_1_block,
             pos: pos_1,
             vel: vel_1,
             force: Vector3::new(0.0, 0.0, 0.0),
@@ -56,6 +56,7 @@ impl<'a> Spring<'a> {
         };
 
         let node_2 = SpringNode {
+            block: node_2_block,
             pos: pos_2,
             vel: vel_2,
             force: Vector3::new(0.0, 0.0, 0.0),
@@ -66,8 +67,6 @@ impl<'a> Spring<'a> {
         Self {
             node_1: node_1,
             node_2: node_2,
-            node_1_block: node_1_block,
-            node_2_block: node_2_block,
             stiffness: stiffness,
             dampen: dampen,
             length: length,
@@ -164,27 +163,38 @@ impl<'a> Spring<'a> {
         node_2.pos += node_2.vel * dt;
     }
 
-    pub fn step_spring(&mut self, dt: f32, window: &mut Window) {
-        self.update_pos(dt);
-        self.update_vel(dt);
-        self.draw_spring(window);
+    fn update_blocks(&mut self) {
         let node_1 = &mut self.node_1;
         let node_2 = &mut self.node_2;
-        translate_to(
-            &mut self.node_1_block,
-            node_1.pos.x,
-            node_1.pos.y,
-            node_1.pos.z,
-        );
-        translate_to(
-            &mut self.node_2_block,
-            node_2.pos.x,
-            node_2.pos.y,
-            node_2.pos.z,
-        );
-        // for spring_node in self.node_1.coupled {
-        //     spring_node.node_block
+        translate_to(&mut node_1.block, node_1.pos.x, node_1.pos.y, node_1.pos.z);
+        translate_to(&mut node_2.block, node_2.pos.x, node_2.pos.y, node_2.pos.z);
+    }
+
+    pub fn step_spring(&mut self, dt: f32, window: &mut Window) {
+        // let mut node_1 = &mut self.node_1;
+        // let mut node_2 = &mut self.node_2;
+        self.update_pos(dt);
+        self.update_vel(dt);
+        self.update_blocks();
+        self.draw_spring(window);
+        // for spring_node in &mut self.node_1.coupled {
+        //     translate_to(
+        //         &mut spring_node.block,
+        //         spring_node.pos.x,
+        //         spring_node.pos.y,
+        //         spring_node.pos.z,
+        //     );
         // }
+        // for spring_node in &mut self.node_2.coupled {
+        //     translate_to(
+        //         &mut spring_node.block,
+        //         spring_node.pos.x,
+        //         spring_node.pos.y,
+        //         spring_node.pos.z,
+        //     );
+        // }
+        // translate_to(node_1.block, node_1.pos.x, node_1.pos.y, node_1.pos.z);
+        // translate_to(node_2.block, node_2.pos.x, node_2.pos.y, node_2.pos.z);
     }
 
     fn draw_spring(&self, window: &mut Window) {
