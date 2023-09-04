@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 dict = "0.1.5"
 kiss3d = "0.35.0"
+nanoid = "0.4.0"
