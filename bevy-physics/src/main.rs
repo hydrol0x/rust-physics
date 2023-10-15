@@ -1,10 +1,10 @@
-use bevy::prelude::*;
+use bevy::{math::vec3, prelude::*};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_systems(Startup, add_people)
-        .add_systems(Update, (hello_world, greet_people))
+        .add_systems(Startup, add_particles)
+        .add_systems(Update, (list_particles, update_positions))
         .run();
 }
 
@@ -25,12 +25,6 @@ struct Name(String);
 //         println!("position: {} {}", position.x, position.y);
 //     }
 // }
-
-fn add_people(mut commands: Commands) {
-    commands.spawn((Person, Name("Elaina Proctor".to_string())));
-    commands.spawn((Person, Name("Renzo Hume".to_string())));
-    commands.spawn((Person, Name("Zayna Nieves".to_string())));
-}
 
 fn add_particles(mut commands: Commands) {
     commands.spawn((
@@ -59,12 +53,14 @@ fn add_particles(mut commands: Commands) {
     ));
 }
 
-fn hello_world() {
-    println!("Hello world");
+fn update_positions(mut query: Query<&mut Position, With<Particle>>) {
+    for mut position in query.iter_mut() {
+        position.0 += vec3(1., 1., 1.);
+    }
 }
 
-fn greet_people(query: Query<&Name, With<Person>>) {
-    for name in &query {
-        println!("hello {}!", name.0);
+fn list_particles(query: Query<&Position, With<Particle>>) {
+    for position in &query {
+        println!("x {}, y {}, z {}", position.0.x, position.0.y, position.0.z);
     }
 }
