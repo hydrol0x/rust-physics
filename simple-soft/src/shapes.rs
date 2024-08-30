@@ -1,6 +1,6 @@
 extern crate nalgebra as na;
 use macroquad::{color::BLACK, prelude::Color};
-use na::Vector2;
+use na::{vector, Vector2};
 
 pub struct Ball {
     pub position: Vector2<f32>,
@@ -41,6 +41,7 @@ pub struct Line {
     pub start_point: Vector2<f32>,
     pub end_point: Vector2<f32>,
     pub color: Color,
+    pub d: Vector2<f32>,
 }
 
 impl Line {
@@ -49,6 +50,17 @@ impl Line {
             start_point: start,
             end_point: end,
             color: BLACK,
+            d: end - start,
+        }
+    }
+
+    pub fn from_vector(vector: Vector2<f32>) -> Self {
+        // creates a new line from origin to position specified by vector
+        Self {
+            start_point: vector![0., 0.],
+            end_point: vector,
+            color: BLACK,
+            d: vector - vector![0., 0.],
         }
     }
 

@@ -1,3 +1,5 @@
+use std::cmp;
+
 use na::{vector, Vector, Vector2};
 
 use crate::shapes::{Ball, Line};
@@ -53,4 +55,31 @@ pub fn ball_line_collision(ball: &Ball, line: &Line) -> bool {
             false
         }
     }
+}
+
+fn perpendicular_component(a: &Vector2<f32>, b: &Vector2<f32>) -> Vector2<f32> {
+    // Calculate the projection of `a` onto `b`
+    let proj_a_on_b = (a.dot(b) / b.dot(b)) * b;
+
+    // Calculate the perpendicular component
+    a - proj_a_on_b
+}
+
+pub fn line_norm_component(vector: &Vector2<f32>, line: &Line) -> Vector2<f32> {
+    // Return the component of `vector` that is perpendicular to the line (in direction of the lines norm)
+    let d = line.end_point - line.start_point;
+    perpendicular_component(&vector, &d)
+}
+pub fn line_line_norm_component(line_1: &Line, line_2: &Line) -> Vector2<f32> {
+    // Return the component of `line_1` that is perpendicular to the line_2 (in direction of the lines norm)
+    let d = &line_1.end_point - &line_1.start_point;
+    line_norm_component(&d, line_2)
+}
+
+pub fn ball_ball_collision(ball_1: &Ball, ball_2: &Ball) -> bool {
+    let d = ball_2.position - ball_1.position;
+    if d.magnitude() < (2.0 * ball_1.radius.max(ball_2.radius)) {
+        return true;
+    }
+    false
 }
