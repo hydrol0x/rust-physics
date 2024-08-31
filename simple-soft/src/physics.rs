@@ -1,6 +1,6 @@
 use std::{cmp, f32::NEG_INFINITY};
 
-use na::{vector, Vector, Vector2};
+use na::{vector, UnitVector2, Vector, Vector2};
 
 use crate::shapes::{Ball, Line};
 
@@ -8,6 +8,11 @@ use crate::shapes::{Ball, Line};
 pub struct Collision {
     pub normal: Vector2<f32>,
     pub depth: f32,
+}
+
+enum ForceGenerator {
+    PointForce(PointForceGenerator),
+    GlobalForce(GlobalForceGenerator),
 }
 
 pub struct PointForceGenerator {
@@ -30,6 +35,24 @@ pub fn point_force(point: &Vector2<f32>, force_generator: &PointForceGenerator) 
     force * unit
 }
 
+pub struct GlobalForceGenerator {
+    pub strength: f32,
+    pub direction: Vector2<f32>,
+}
+
+impl GlobalForceGenerator {
+    pub fn new(strength: f32, direction: Vector2<f32>) -> Self {
+        Self {
+            strength,
+            direction: direction.normalize(),
+        }
+    }
+
+    pub fn force(&self) -> Vector2<f32> {
+        self.strength * self.direction
+    }
+}
+
 impl Collision {
     pub fn new(normal: Vector2<f32>, depth: f32) -> Self {
         Self {
@@ -46,7 +69,8 @@ impl Collision {
 }
 
 pub fn gforce(mass: f32) -> Vector2<f32> {
-    (9.8 * mass) * vector![0.0, 1.0] // in this, down is positive
+    let gravity_generator = GlobalForceGenerator::new(9.8, vector![0., 1.]);
+    mass * gravity_generator.force()
 }
 
 pub fn calc_acceleration(force: &Vector2<f32>, mass: f32) -> Vector2<f32> {

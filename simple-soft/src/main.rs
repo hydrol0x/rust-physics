@@ -84,9 +84,6 @@ async fn main() {
         for shape in &mut shapes {
             match shape {
                 Shape::Ball(ball) => {
-                    // let force = gforce(ball.mass);
-                    // let force = vector![0., 0.];
-
                     let mut mouse_point_force = vector![0., 0.];
                     if is_mouse_button_down(MouseButton::Right) {
                         mouse_point_force =
