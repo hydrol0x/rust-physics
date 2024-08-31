@@ -10,6 +10,26 @@ pub struct Collision {
     pub depth: f32,
 }
 
+pub struct PointForceGenerator {
+    // acts as an attractive or repulsive force of charge `strength` and assuming all objects have a 'charge' of 1
+    pub strength: f32,
+    pub position: Vector2<f32>,
+}
+
+impl PointForceGenerator {
+    pub fn new(strength: f32, position: Vector2<f32>) -> Self {
+        Self { strength, position }
+    }
+}
+
+pub fn point_force(point: &Vector2<f32>, force_generator: &PointForceGenerator) -> Vector2<f32> {
+    // 1/r dropoff
+    let d = force_generator.position - point;
+    let unit = d.normalize();
+    let force = force_generator.strength;
+    force * unit
+}
+
 impl Collision {
     pub fn new(normal: Vector2<f32>, depth: f32) -> Self {
         Self {
