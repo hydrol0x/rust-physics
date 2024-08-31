@@ -38,17 +38,21 @@ async fn main() {
     fn generate_balls(n: u32, shapes: &mut Vec<Shape>) {
         let mut rng = ::rand::thread_rng();
         for i in 0..n {
-            let ball = Ball::new_default();
+            let mut ball = Ball::new_default();
             let x: f32 = rng.gen_range(55..=400) as f32;
             let y: f32 = rng.gen_range(55..=400) as f32;
+            let vx: f32 = rng.gen_range(-20..=20) as f32;
+            let vy: f32 = rng.gen_range(-20..=20) as f32;
             let position = vector![x, y];
+            let velocity = vector![vx, vy];
+            ball.velocity = velocity;
             shapes.push(Shape::Ball(ball.translate_to(position)));
         }
     }
     let dt = 0.1;
 
     let mut shapes: Vec<Shape> = Vec::new();
-    generate_balls(5, &mut shapes);
+    generate_balls(100, &mut shapes);
 
     let mut collisions: Vec<(usize, Collision)> = Vec::new();
 
@@ -62,8 +66,6 @@ async fn main() {
     shapes.push(Shape::Line(left_wall));
     shapes.push(Shape::Line(right_wall));
     // ball_2.velocity = vector![0., -30.];
-    let ball = Shape::Ball(ball_2.translate_to(vector![100., 80.]));
-    shapes.push(ball);
 
     // println!("{}", point_line_distance(line, point));
     // println!("{:?}", collisions);
@@ -76,7 +78,6 @@ async fn main() {
         let mpoint = vector![mpos.0, mpos.1];
         let mvel = input::mouse_delta_position() * 0.1;
         let mvel_vec = vector![mvel[0], mvel[1]];
-        mouse_delta_buf.push_back(mvel_vec);
         for shape in &mut shapes {
             match shape {
                 Shape::Ball(ball) => {
@@ -85,7 +86,11 @@ async fn main() {
 
                     ball.force = gforce(ball.mass);
                     ball.acceleration = ball.force / ball.mass;
-                    ball.velocity = calc_vel(&ball.velocity, &ball.acceleration, dt);
+                    let mut vel = calc_vel(&ball.velocity, &ball.acceleration, dt);
+                    if vel.magnitude() < 0.5 {
+                        vel = vector![0., 0.];
+                    }
+                    ball.velocity = vel;
                     ball.position = calc_pos(&ball.position, &ball.velocity, dt);
                     render_ball(ball);
 
@@ -149,7 +154,8 @@ async fn main() {
                             let vel = &ball.velocity;
                             let perp_component = line_norm_component(vel, line);
 
-                            let collision_depth = point_line_distance(&line, &ball.position);
+                            let collision_depth =
+                                ball.radius - point_line_distance(&line, &ball.position);
                             let collision = Collision::new(line.normal(), collision_depth);
                             let collision_2 = Collision::new(line.normal(), collision_depth);
                             collisions.push((i, collision));
@@ -174,8 +180,13 @@ async fn main() {
                     //     ball.velocity = ball.velocity - 2. * *value;
                     // }
 
-                    ball.velocity = wall_collision_velocity(&collision, ball);
-                    ball.translate_by(wall_collision_position_delta(&collision));
+                    // TODO: add properties to each object for elasticity and friction coeff. so that this can be updated, and add these to Collision
+                    let pos_delta = wall_collision_position_delta(&collision);
+
+                    ball.translate_by(pos_delta);
+                    let ball_vel = 0.98 * wall_collision_velocity(&collision, ball);
+
+                    ball.velocity = ball_vel;
                 }
 
                 (Shape::Line(line)) => {

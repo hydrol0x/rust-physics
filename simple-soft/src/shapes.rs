@@ -1,4 +1,5 @@
 extern crate nalgebra as na;
+
 use macroquad::{
     color::{BLACK, WHITE},
     miniquad::gl::WGL_ACCELERATION_ARB,
@@ -219,3 +220,22 @@ pub fn point_line_distance(line: &Line, point: &Vector2<f32>) -> f32 {
     let proj = line.start_point + t * line.d;
     return (point - proj).magnitude(); // distance from point to its projection on the line
 }
+
+pub fn closest_circle_point_point(ball: &Ball, point: &Vector2<f32>) -> Vector2<f32> {
+    // https://stackoverflow.com/a/300894
+    let px = point[0];
+    let py = point[1];
+    let cx = ball.position[0];
+    let cy = ball.position[1];
+    let vx = px - cx;
+    let vy = py - cy;
+    let magv = (vx * vx + vy * vy).powf(0.5);
+    let ax = cx + vx / magv * ball.radius;
+    let ay = cy + vy / magv * ball.radius;
+    vector![ax, ay]
+}
+
+// pub fn circle_line_distance(ball: &Ball, line: &Line) -> f32 {
+//     point_line_distance(line, &ball.position);
+
+// }

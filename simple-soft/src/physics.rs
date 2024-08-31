@@ -81,6 +81,7 @@ pub fn wall_collision_velocity(collision: &Collision, ball: &Ball) -> Vector2<f3
 pub fn wall_collision_position_delta(collision: &Collision) -> Vector2<f32> {
     let normal = collision.normal;
     let unit_normal = normal.normalize();
-    let depth = collision.depth;
-    -unit_normal * depth
+    let mut depth = collision.depth;
+
+    -unit_normal * (depth)
 }
