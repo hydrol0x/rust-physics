@@ -8,8 +8,17 @@ use crate::shapes::{Ball, Line};
 pub struct Collision {
     pub normal: Vector2<f32>,
     pub depth: f32,
+    pub elasticity: f32,
 }
-
+impl Collision {
+    pub fn new(normal: Vector2<f32>, depth: f32, elasticity: f32) -> Self {
+        Self {
+            normal: normal,
+            depth: depth,
+            elasticity: elasticity,
+        }
+    }
+}
 enum ForceGenerator {
     PointForce(PointForceGenerator),
     GlobalForce(GlobalForceGenerator),
@@ -50,21 +59,6 @@ impl GlobalForceGenerator {
 
     pub fn force(&self) -> Vector2<f32> {
         self.strength * self.direction
-    }
-}
-
-impl Collision {
-    pub fn new(normal: Vector2<f32>, depth: f32) -> Self {
-        Self {
-            normal: normal,
-            depth: depth, // depth of NEG INF represents no collision
-        }
-    }
-    pub fn new_default() -> Self {
-        Self {
-            normal: vector![0., 0.],
-            depth: NEG_INFINITY, // depth of NEG INF represents no collision
-        }
     }
 }
 

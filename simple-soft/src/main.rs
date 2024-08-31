@@ -49,13 +49,14 @@ async fn main() {
             let position = vector![x, y];
             let velocity = vector![vx, vy];
             ball.velocity = velocity;
+            ball.elasticity = 0.98;
             shapes.push(Shape::Ball(ball.translate_to(position)));
         }
     }
     let dt = 0.1;
 
     let mut shapes: Vec<Shape> = Vec::new();
-    generate_balls(100, &mut shapes);
+    generate_balls(30, &mut shapes);
     let mut collisions: Vec<(usize, Collision)> = Vec::new();
 
     let top_wall = Line::new(vector![50., 50.], vector![500., 50.]);
@@ -154,7 +155,15 @@ async fn main() {
                 match (obj1, obj2) {
                     (Shape::Ball(ball1), Shape::Ball(ball2)) => {
                         if ball_ball_collision(ball1, ball2) {
-                            // Handle collision
+                            let d = ball2.position - ball1.position;
+                            let total_radius = ball1.radius + ball2.radius;
+                            let collision_depth = d.magnitude() / 2.;
+                            let normal = d.normalize();
+                            let collision_1 =
+                                Collision::new(normal, collision_depth, ball1.elasticity);
+                            let collision_2 = Collision::new(-normal, 0., ball1.elasticity);
+                            collisions.push((i, collision_1));
+                            collisions.push((i + j + 1, collision_2));
                         }
                     }
                     (Shape::Ball(ball), Shape::Line(line))
@@ -166,8 +175,10 @@ async fn main() {
 
                             let collision_depth =
                                 ball.radius - point_line_distance(&line, &ball.position);
-                            let collision = Collision::new(line.normal(), collision_depth);
-                            let collision_2 = Collision::new(line.normal(), collision_depth);
+                            let collision =
+                                Collision::new(line.normal(), collision_depth, ball.elasticity);
+                            let collision_2 =
+                                Collision::new(line.normal(), collision_depth, ball.elasticity);
                             collisions.push((i, collision));
                             collisions.push((i + j + 1, collision_2));
                         }
@@ -191,10 +202,11 @@ async fn main() {
                     // }
 
                     // TODO: add properties to each object for elasticity and friction coeff. so that this can be updated, and add these to Collision
+                    // TODO: change these function names to not be wall but just general collision since its not only wall
                     let pos_delta = wall_collision_position_delta(&collision);
 
                     ball.translate_by(pos_delta);
-                    let ball_vel = 0.98 * wall_collision_velocity(&collision, ball);
+                    let ball_vel = collision.elasticity * wall_collision_velocity(&collision, ball);
 
                     ball.velocity = ball_vel;
                 }

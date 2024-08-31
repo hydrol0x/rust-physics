@@ -17,6 +17,7 @@ pub struct Ball {
     pub radius: f32,
     pub color: Color,
     pub clicked: bool,
+    pub elasticity: f32,
 }
 
 impl Ball {
@@ -27,6 +28,7 @@ impl Ball {
         force: Vector2<f32>,
         mass: f32,
         radius: f32,
+        elasticity: f32,
     ) -> Self {
         Self {
             position,
@@ -37,6 +39,7 @@ impl Ball {
             radius,
             color: WHITE,
             clicked: false,
+            elasticity: elasticity,
         }
     }
 
@@ -55,6 +58,7 @@ impl Ball {
             vector![0., 0.],
             1.0,
             10.0,
+            0.8,
         )
     }
 
