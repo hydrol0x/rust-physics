@@ -1,14 +1,11 @@
-use camera::mouse;
-use circular_buffer::CircularBuffer;
 use physics::interpolate_mouse_force;
-use std::collections::HashSet;
+use physics::wall_collision_position_delta;
+use physics::wall_collision_velocity;
 extern crate nalgebra as na;
 
 mod physics;
 
 mod shapes;
-use std::hint::black_box;
-use std::thread::sleep;
 
 use physics::Collision;
 use renderer::render_ball;
@@ -16,7 +13,6 @@ use shapes::ball_ball_collision;
 use shapes::ball_line_collision;
 use shapes::ball_point_collision;
 use shapes::line_line_collision;
-use shapes::line_line_norm_component;
 use shapes::line_norm_component;
 use shapes::point_line_distance;
 use shapes::{Ball, Line, Shape};
@@ -28,7 +24,7 @@ mod renderer;
 use renderer::render_line;
 
 use na::{vector, Vector2};
-use physics::{calc_acceleration, calc_pos, calc_vel, gforce};
+use physics::{calc_pos, calc_vel, gforce};
 
 use ::rand::Rng;
 
@@ -61,9 +57,6 @@ async fn main() {
     let right_wall = Line::new(vector![500., 50.], vector![500., 500.]);
     let bottom_wall = Line::new(vector![500., 500.], vector![50., 500.]);
 
-    let mut ball_1 = Ball::new_default();
-    let mut ball_2 = Ball::new_default();
-
     shapes.push(Shape::Line(bottom_wall));
     shapes.push(Shape::Line(top_wall));
     shapes.push(Shape::Line(left_wall));
@@ -72,13 +65,8 @@ async fn main() {
     let ball = Shape::Ball(ball_2.translate_to(vector![100., 80.]));
     shapes.push(ball);
 
-    let point = vector![0., 0.];
-    let line = Line::new(vector![-2., -10.], vector![-2., -10.]);
-
     // println!("{}", point_line_distance(line, point));
     // println!("{:?}", collisions);
-    let mut mouse_delta_buf = CircularBuffer::<5, Vector2<f32>>::new();
-    mouse_delta_buf.fill_with(|| vector![0., 0.]);
     let mut ball_focused = false;
     loop {
         // println!("{:?}", collisions);
@@ -110,14 +98,12 @@ async fn main() {
                     if is_mouse_button_down(MouseButton::Left) {
                         if ball.clicked {
                             // ball.velocity = vector![0., 0.];
-                            let sum_mouse_deltas: Vector2<f32> = mouse_delta_buf.iter().sum();
-                            let average_mouse_delta = sum_mouse_deltas / 10.; // hardcoded buffer size since the .capacity() returns usize but need f32
 
                             ball.velocity = interpolate_mouse_force(
                                 ball.position,
                                 mpoint,
                                 ball.velocity,
-                                100.,
+                                300.,
                                 0.9,
                             )
                         } else if !ball_focused && ball_point_collision(&ball, &mpoint, 20.0) {
@@ -188,13 +174,8 @@ async fn main() {
                     //     ball.velocity = ball.velocity - 2. * *value;
                     // }
 
-                    let normal = collision.normal;
-                    let unit_normal = normal.normalize();
-                    let depth = collision.depth;
-                    ball.translate_by(-unit_normal * depth);
-                    let delta = unit_normal * ball.velocity.dot(&unit_normal);
-                    let new_velocity = ball.velocity - 2. * delta;
-                    ball.velocity = new_velocity;
+                    ball.velocity = wall_collision_velocity(&collision, ball);
+                    ball.translate_by(wall_collision_position_delta(&collision));
                 }
 
                 (Shape::Line(line)) => {
