@@ -77,14 +77,18 @@ async fn main() {
         let mpos = input::mouse_position();
         let mpoint = vector![mpos.0, mpos.1];
         let mvel = input::mouse_delta_position() * 0.1;
-        let mvel_vec = vector![mvel[0], mvel[1]];
         for shape in &mut shapes {
             match shape {
                 Shape::Ball(ball) => {
                     // let force = gforce(ball.mass);
                     // let force = vector![0., 0.];
 
-                    ball.force = gforce(ball.mass);
+                    if input::is_key_down(KeyCode::Space) {
+                        ball.force = vector![0., 0.];
+                        println!("space press");
+                    } else {
+                        ball.force = gforce(ball.mass);
+                    }
                     ball.acceleration = ball.force / ball.mass;
                     let mut vel = calc_vel(&ball.velocity, &ball.acceleration, dt);
                     if vel.magnitude() < 0.5 {
@@ -152,7 +156,6 @@ async fn main() {
                             // println!("Collision detected between ball and line!");
 
                             let vel = &ball.velocity;
-                            let perp_component = line_norm_component(vel, line);
 
                             let collision_depth =
                                 ball.radius - point_line_distance(&line, &ball.position);
