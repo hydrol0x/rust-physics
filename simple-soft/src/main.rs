@@ -30,6 +30,8 @@ use renderer::render_line;
 use na::{vector, Vector2};
 use physics::{calc_acceleration, calc_pos, calc_vel, gforce};
 
+use ::rand::Rng;
+
 #[macroquad::main("MyGame")]
 
 // fn create_balls() {
@@ -37,9 +39,20 @@ use physics::{calc_acceleration, calc_pos, calc_vel, gforce};
 // }
 
 async fn main() {
+    fn generate_balls(n: u32, shapes: &mut Vec<Shape>) {
+        let mut rng = ::rand::thread_rng();
+        for i in 0..n {
+            let ball = Ball::new_default();
+            let x: f32 = rng.gen_range(55..=400) as f32;
+            let y: f32 = rng.gen_range(55..=400) as f32;
+            let position = vector![x, y];
+            shapes.push(Shape::Ball(ball.translate_to(position)));
+        }
+    }
     let dt = 0.1;
 
     let mut shapes: Vec<Shape> = Vec::new();
+    generate_balls(5, &mut shapes);
 
     let mut collisions: Vec<(usize, Collision)> = Vec::new();
 
@@ -66,6 +79,7 @@ async fn main() {
     // println!("{:?}", collisions);
     let mut mouse_delta_buf = CircularBuffer::<5, Vector2<f32>>::new();
     mouse_delta_buf.fill_with(|| vector![0., 0.]);
+    let mut ball_focused = false;
     loop {
         // println!("{:?}", collisions);
         // TODO: have a general shapes vector (enum?) and match over the shape type to drawline drawcircle etc
@@ -81,16 +95,17 @@ async fn main() {
                     // let force = gforce(ball.mass);
                     // let force = vector![0., 0.];
 
+                    ball.force = gforce(ball.mass);
                     ball.acceleration = ball.force / ball.mass;
                     ball.velocity = calc_vel(&ball.velocity, &ball.acceleration, dt);
                     ball.position = calc_pos(&ball.position, &ball.velocity, dt);
                     render_ball(ball);
 
-                    if is_mouse_button_down(MouseButton::Right) && ball.clicked {
-                        ball.position = mpoint;
-                        ball.velocity = vector![0., 0.];
-                        ball.force = vector![0., 0.];
-                    }
+                    // if is_mouse_button_down(MouseButton::Right) && ball.clicked {
+                    //     ball.position = mpoint;
+                    //     ball.velocity = vector![0., 0.];
+                    //     ball.force = vector![0., 0.];
+                    // }
 
                     if is_mouse_button_down(MouseButton::Left) {
                         if ball.clicked {
@@ -105,13 +120,15 @@ async fn main() {
                                 100.,
                                 0.9,
                             )
-                        } else if ball_point_collision(&ball, &mpoint, 20.0) {
+                        } else if !ball_focused && ball_point_collision(&ball, &mpoint, 20.0) {
                             ball.clicked = true;
+                            ball_focused = true;
                             ball.position = mpoint;
                             ball.color = BLACK;
                         }
                     } else {
                         ball.clicked = false;
+                        ball_focused = false;
                         ball.force = vector![0., 0.];
                         ball.color = WHITE;
                     }
