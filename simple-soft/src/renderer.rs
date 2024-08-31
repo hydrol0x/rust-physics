@@ -11,3 +11,7 @@ pub fn render_line(line: &Line) {
         line.color,
     );
 }
+
+pub fn render_ball(ball: &Ball) {
+    draw_circle(ball.position[0], ball.position[1], ball.radius, ball.color);
+}
