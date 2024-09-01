@@ -6,17 +6,12 @@ use crate::shapes::{Ball, Line};
 
 #[derive(Debug)]
 pub struct Collision {
-    pub normal: Vector2<f32>,
-    pub depth: f32,
-    pub elasticity: f32,
+    pub translate_by: Vector2<f32>,
+    pub vf: Vector2<f32>,
 }
 impl Collision {
-    pub fn new(normal: Vector2<f32>, depth: f32, elasticity: f32) -> Self {
-        Self {
-            normal: normal,
-            depth: depth,
-            elasticity: elasticity,
-        }
+    pub fn new(translate_by: Vector2<f32>, vf: Vector2<f32>) -> Self {
+        Self { translate_by, vf }
     }
 }
 enum ForceGenerator {
@@ -108,25 +103,107 @@ pub fn interpolate_mouse_force(
     current_force + (desired_force - current_force) * damping
 }
 
-pub fn wall_collision_velocity(collision: &Collision, ball: &Ball) -> Vector2<f32> {
-    let normal = collision.normal;
+fn elastic_collision_velocity_mag(m_a: f32, m_b: f32, u_a: f32, u_b: f32, c_r: f32) -> (f32, f32) {
+    // https://en.wikipedia.org/wiki/Inelastic_collision
+
+    let ma_ua = m_a * u_a;
+    let mb_ub = m_b * u_b;
+    let mass_recipricol = 1. / (m_a + m_b);
+
+    let v_a = c_r * (m_b * (u_b - u_a) + ma_ua + mb_ub) * mass_recipricol;
+    let v_b = c_r * (m_a * (u_a - u_b) + ma_ua + mb_ub) * mass_recipricol;
+
+    (v_a, v_b)
+}
+
+pub fn elastic_collision_velocity(ball_a: &Ball, ball_b: &Ball) -> (Vector2<f32>, Vector2<f32>) {
+    // I don't know why I didn't do on vectors directly, will change later, idk if the equations will work if you just plug the vectors in.
+
+    let u_a = ball_a.velocity;
+    let u_b = ball_b.velocity;
+
+    let m_a = ball_a.mass;
+    let m_b = ball_b.mass;
+
+    let c_r = ball_a.elasticity.min(ball_b.elasticity);
+
+    let (va_x, vb_x) = elastic_collision_velocity_mag(m_a, m_b, u_a.x, u_b.y, c_r);
+    let (va_y, vb_y) = elastic_collision_velocity_mag(m_a, m_b, u_a.y, u_b.y, c_r);
+
+    let va = vector![va_x, va_y];
+    let vb = vector![vb_x, vb_y];
+
+    (va, vb)
+}
+
+pub fn wall_collision_velocity(
+    normal: Vector2<f32>,
+    c_r: f32,
+    friction: f32,
+    dt: f32,
+    ball: &Ball,
+) -> Vector2<f32> {
+    let mut vn = normal.normalize() * normal.normalize().dot(&ball.velocity);
+
+    let mut vt = ball.velocity - vn; // tangent v
     let unit_normal = normal.normalize();
     let delta = unit_normal * ball.velocity.dot(&unit_normal);
-    ball.velocity - 2. * delta
+
+    vn = -c_r * vn; // reverse and apply elasticity
+
+    vt *= (-friction * dt).exp();
+
+    vn + vt
 }
 
-pub fn wall_collision_position_delta(collision: &Collision) -> Vector2<f32> {
-    let normal = collision.normal;
-    let unit_normal = normal.normalize();
-    let mut depth = collision.depth;
+// pub fn wall_collision_velocity(ball: &Ball, line: &Line, normal: Vector2<f32>) -> Vector2<f32> {
+//     // Mass of the ball and line
+//     let m_a = ball.mass;
+//     let m_b = line.mass; // Assuming the line has a mass property
 
-    -unit_normal * (depth)
+//     // Coefficient of restitution (elasticity)
+//     let c_r = ball.elasticity.min(line.elasticity); // Use the lesser elasticity for the collision
+
+//     // Get the velocity of the ball
+//     let u_a = ball.velocity;
+
+//     // Assume the line is stationary for simplicity (velocity is zero)
+//     let u_b = vector![0.0, 0.0];
+
+//     // Calculate the relative velocity along the normal
+//     let relative_velocity = u_a.dot(&normal);
+
+//     // If the relative velocity is moving towards the line (negative), calculate the collision response
+//     if relative_velocity < 0.0 {
+//         // Project the velocity onto the normal direction
+//         let u_a_normal = relative_velocity * normal;
+
+//         // Use the elastic collision formula for magnitudes
+//         let (v_a_mag, _) = elastic_collision_velocity_mag(m_a, m_b, relative_velocity, 0.0, c_r);
+
+//         // Calculate the final velocity of the ball in the normal direction
+//         let v_a_normal = v_a_mag * normal;
+
+//         // Calculate the final velocity of the ball by subtracting the change in velocity along the normal
+//         let final_velocity = u_a - (u_a_normal - v_a_normal);
+
+//         final_velocity
+//     } else {
+//         // No collision response needed if moving away from the line
+//         u_a
+//     }
+// }
+
+pub fn collision_position_delta(normal: Vector2<f32>, depth: f32) -> Vector2<f32> {
+    let unit_normal = normal.normalize();
+    if depth >= 0. {
+        return unit_normal * depth;
+    }
+    vector![0., 0.]
 }
 
-pub fn collision_force(collision: &Collision, ball: &Ball) -> Vector2<f32> {
-    let normal = collision.normal;
+pub fn collision_force(normal: Vector2<f32>, ball: &Ball) -> Vector2<f32> {
     let unit_normal = normal.normalize();
-    let depth = collision.depth;
     let delta = 2. * unit_normal * ball.velocity.dot(&unit_normal);
     let force = delta / 0.001;
 
