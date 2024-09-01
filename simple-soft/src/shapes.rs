@@ -1,5 +1,7 @@
 extern crate nalgebra as na;
 
+use std::f32::INFINITY;
+
 use macroquad::{
     color::{BLACK, WHITE},
     miniquad::gl::WGL_ACCELERATION_ARB,
@@ -8,6 +10,9 @@ use macroquad::{
 use na::{distance, vector, Vector, Vector2};
 
 #[derive(Debug)]
+pub struct Spring {}
+
+#[derive(Debug, Clone, Copy)]
 pub struct Ball {
     pub position: Vector2<f32>,
     pub velocity: Vector2<f32>,
@@ -73,12 +78,14 @@ impl Ball {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Line {
     pub start_point: Vector2<f32>,
     pub end_point: Vector2<f32>,
     pub color: Color,
     pub d: Vector2<f32>,
+    pub elasticity: f32,
+    pub mass: f32,
 }
 
 impl Line {
@@ -88,17 +95,14 @@ impl Line {
             end_point: end,
             color: BLACK,
             d: end - start,
+            elasticity: 1.,
+            mass: INFINITY,
         }
     }
 
     pub fn from_vector(vector: Vector2<f32>) -> Self {
         // creates a new line from origin to position specified by vector
-        Self {
-            start_point: vector![0., 0.],
-            end_point: vector,
-            color: BLACK,
-            d: vector - vector![0., 0.],
-        }
+        Self::new(vector![0., 0.], vector)
     }
 
     pub fn to_vector(line: &Line) -> Vector2<f32> {
@@ -131,7 +135,7 @@ impl Line {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Shape {
     Ball(Ball),
     Line(Line),
