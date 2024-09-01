@@ -23,6 +23,7 @@ pub struct Ball {
     pub color: Color,
     pub clicked: bool,
     pub elasticity: f32,
+    pub friction: f32,
 }
 
 impl Ball {
@@ -34,6 +35,7 @@ impl Ball {
         mass: f32,
         radius: f32,
         elasticity: f32,
+        friction: f32,
     ) -> Self {
         Self {
             position,
@@ -45,6 +47,7 @@ impl Ball {
             color: WHITE,
             clicked: false,
             elasticity: elasticity,
+            friction: friction,
         }
     }
 
@@ -64,6 +67,7 @@ impl Ball {
             1.0,
             10.0,
             0.8,
+            5.0,
         )
     }
 
@@ -85,6 +89,7 @@ pub struct Line {
     pub color: Color,
     pub d: Vector2<f32>,
     pub elasticity: f32,
+    pub friction: f32,
     pub mass: f32,
 }
 
@@ -96,6 +101,7 @@ impl Line {
             color: BLACK,
             d: end - start,
             elasticity: 1.,
+            friction: 10.,
             mass: INFINITY,
         }
     }

@@ -1,5 +1,7 @@
 use std::default;
 
+use constraints::Constraint;
+use constraints::SpringConstraint;
 use na::constraint;
 use na::min;
 use physics::collision_position_delta;
@@ -48,6 +50,7 @@ use constraints::DistanceConstraint;
 async fn main() {
     let N = 10; // number of balls
     let MAX_VELOCITY = 1000.;
+    let dt = 0.1;
 
     fn generate_balls(n: u32, shapes: &mut Vec<Shape>) {
         let mut rng = ::rand::thread_rng();
@@ -64,42 +67,35 @@ async fn main() {
             shapes.push(Shape::Ball(ball.translate_to(position)));
         }
     }
-    let dt = 0.1;
 
-    let mut constraints: Vec<DistanceConstraint> = Vec::new();
+    let mut constraints: Vec<Constraint> = Vec::new();
 
     let mut shapes: Vec<Shape> = Vec::new();
     generate_balls(N, &mut shapes);
 
     // shapes.push(Shape::Ball(
-    //     Ball::new_default().translate_to(vector![100., 100.]),
+    //     Ball::new_default().translate_to(vector![110., 100.]),
     // ));
     // shapes.push(Shape::Ball(
-    //     Ball::new_default().translate_to(vector![110., 100.]),
+    //     Ball::new_default().translate_to(vector![115., 100.]),
+    // ));
+    // shapes.push(Shape::Ball(
+    //     Ball::new_default().translate_to(vector![120., 100.]),
+    // ));
+    // shapes.push(Shape::Ball(
+    //     Ball::new_default().translate_to(vector![130., 100.]),
+    // ));
+    // shapes.push(Shape::Ball(
+    //     Ball::new_default().translate_to(vector![112., 100.]),
     // ));
     let mut collisions: Vec<(usize, Collision)> = Vec::new();
 
-    let constraint = DistanceConstraint {
-        index_0: 0,
-        index_1: 1,
-        distance: 40.,
-    };
-    let constraint2 = DistanceConstraint {
-        index_0: 1,
-        index_1: 2,
-        distance: 40.,
-    };
-    let constraint3 = DistanceConstraint {
-        index_0: 2,
-        index_1: 3,
-        distance: 40.,
-    };
-    let constraint4 = DistanceConstraint {
-        index_0: 3,
-        index_1: 0,
-        distance: 40.,
-    };
-    // constraints.push(constraint);
+    let mut constraint = SpringConstraint::default();
+    constraint.index_0 = 0;
+    constraint.index_1 = 1;
+    constraint.distance = 40.;
+    constraint.k = 20.;
+    constraints.push(Constraint::Spring(constraint));
 
     let top_wall = Line::new(vector![50., 50.], vector![500., 50.]);
     let left_wall = Line::new(vector![50., 500.], vector![50., 50.]);
@@ -175,7 +171,7 @@ async fn main() {
                                 ball.position,
                                 mpoint,
                                 ball.velocity,
-                                300.,
+                                30. / dt,
                                 0.9,
                             )
                         } else if !ball_focused && ball_point_collision(&ball, &mpoint, 20.0) {
@@ -238,8 +234,8 @@ async fn main() {
 
                             let (vf_a, vf_b) = elastic_collision_velocity(ball1, ball2);
 
-                            let collision_1 = Collision::new(vector![0., 0.], c_r * vf_a);
-                            let collision_2 = Collision::new(2. * translate_by_b, c_r * vf_b);
+                            let collision_1 = Collision::new(-translate_by_a, c_r * vf_a);
+                            let collision_2 = Collision::new(translate_by_b, c_r * vf_b);
 
                             collisions.push((i, collision_1));
                             collisions.push((shapes_j_index, collision_2));
@@ -250,6 +246,8 @@ async fn main() {
                             // println!("Collision detected between ball and line!");
                             let mut normal = line.normal();
                             let ball_to_line = line.start_point - ball.position;
+                            let c_r = ball.elasticity.min(line.elasticity);
+                            let friction = ball.friction.min(line.friction);
 
                             if ball_to_line.dot(&normal) < 0.0 {
                                 // If the normal is facing the wrong way, flip it
@@ -266,10 +264,10 @@ async fn main() {
                                     -collision_position_delta(normal, collision_depth);
 
                                 // Compute the final velocity after collision
-                                let vf_ball = -wall_collision_velocity(ball, normal);
+                                let vf_ball =
+                                    wall_collision_velocity(normal, c_r, friction, dt, ball);
 
                                 // Create a collision object to store translation and velocity updates for the ball
-                                println!("displacement: {};\n vf: {}", translate_by_ball, vf_ball);
                                 let collision = Collision::new(translate_by_ball, vf_ball);
 
                                 // Add collision object for the ball
@@ -282,6 +280,8 @@ async fn main() {
                             // Calculate collision normal (line's normal direction)
                             let mut normal = line.normal();
                             let ball_to_line = line.start_point - ball.position;
+                            let c_r = ball.elasticity.min(line.elasticity);
+                            let friction = ball.friction.min(line.friction);
 
                             if ball_to_line.dot(&normal) > 0.0 {
                                 // If the normal is facing the wrong way, flip it
@@ -297,7 +297,8 @@ async fn main() {
                                     collision_position_delta(normal, collision_depth);
 
                                 // Compute the final velocity after collision
-                                let vf_ball = wall_collision_velocity(ball, normal);
+                                let vf_ball =
+                                    wall_collision_velocity(normal, c_r, friction, dt, ball);
 
                                 // Create a collision object to store translation and velocity updates for the ball
                                 let collision = Collision::new(translate_by_ball, vf_ball);

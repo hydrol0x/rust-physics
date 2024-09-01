@@ -136,33 +136,24 @@ pub fn elastic_collision_velocity(ball_a: &Ball, ball_b: &Ball) -> (Vector2<f32>
     (va, vb)
 }
 
-pub fn wall_collision_velocity(ball: &Ball, line_normal: Vector2<f32>) -> Vector2<f32> {
-    // Coefficient of restitution (elasticity)
-    let c_r = ball.elasticity;
+pub fn wall_collision_velocity(
+    normal: Vector2<f32>,
+    c_r: f32,
+    friction: f32,
+    dt: f32,
+    ball: &Ball,
+) -> Vector2<f32> {
+    let mut vn = normal.normalize() * normal.normalize().dot(&ball.velocity);
 
-    // Get the velocity of the ball
-    let u_a = ball.velocity;
+    let mut vt = ball.velocity - vn; // tangent v
+    let unit_normal = normal.normalize();
+    let delta = unit_normal * ball.velocity.dot(&unit_normal);
 
-    // Calculate the relative velocity along the normal
-    let relative_velocity = u_a.dot(&line_normal);
+    vn = -c_r * vn; // reverse and apply elasticity
 
-    // If the ball is moving towards the line (negative relative velocity)
-    if relative_velocity < 0.0 {
-        // Split the velocity into normal and tangential components
-        let u_a_normal = relative_velocity * line_normal;
-        let u_a_tangent = u_a - u_a_normal;
+    vt *= (-friction * dt).exp();
 
-        // Compute the final velocity in the normal direction after collision
-        let v_a_normal = -c_r * u_a_normal; // reverse and scale by elasticity
-
-        // The final velocity is the sum of the unchanged tangential component and the reflected normal component
-        let final_velocity = u_a_tangent + v_a_normal;
-
-        final_velocity
-    } else {
-        // If moving away from the line, no collision response is needed
-        u_a
-    }
+    vn + vt
 }
 
 // pub fn wall_collision_velocity(ball: &Ball, line: &Line, normal: Vector2<f32>) -> Vector2<f32> {
@@ -205,10 +196,10 @@ pub fn wall_collision_velocity(ball: &Ball, line_normal: Vector2<f32>) -> Vector
 
 pub fn collision_position_delta(normal: Vector2<f32>, depth: f32) -> Vector2<f32> {
     let unit_normal = normal.normalize();
-    // if depth >= 0. {
-    // }
-    return unit_normal * depth;
-    // vector![0., 0.]
+    if depth >= 0. {
+        return unit_normal * depth;
+    }
+    vector![0., 0.]
 }
 
 pub fn collision_force(normal: Vector2<f32>, ball: &Ball) -> Vector2<f32> {
