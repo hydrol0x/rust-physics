@@ -1,3 +1,6 @@
+use std::default;
+
+use na::constraint;
 use physics::interpolate_mouse_force;
 use physics::point_force;
 use physics::wall_collision_position_delta;
@@ -8,6 +11,7 @@ mod physics;
 
 mod shapes;
 
+use physics::collision_force;
 use physics::Collision;
 use physics::PointForceGenerator;
 use renderer::render_ball;
@@ -16,7 +20,6 @@ use shapes::ball_ball_collision;
 use shapes::ball_line_collision;
 use shapes::ball_point_collision;
 use shapes::line_line_collision;
-use shapes::line_norm_component;
 use shapes::point_line_distance;
 use shapes::{Ball, Line, Shape};
 
@@ -30,6 +33,9 @@ use na::{vector, Vector2};
 use physics::{calc_pos, calc_vel, gforce};
 
 use ::rand::Rng;
+
+mod constraints;
+use constraints::DistanceConstraint;
 
 #[macroquad::main("MyGame")]
 
@@ -55,9 +61,40 @@ async fn main() {
     }
     let dt = 0.1;
 
+    let mut constraints: Vec<DistanceConstraint> = Vec::new();
+
     let mut shapes: Vec<Shape> = Vec::new();
-    generate_balls(30, &mut shapes);
+    generate_balls(3, &mut shapes);
+    shapes.push(Shape::Ball(
+        Ball::new_default().translate_to(vector![100., 100.]),
+    ));
+    shapes.push(Shape::Ball(
+        Ball::new_default().translate_to(vector![110., 100.]),
+    ));
     let mut collisions: Vec<(usize, Collision)> = Vec::new();
+
+    let constraint = DistanceConstraint {
+        index_0: 0,
+        index_1: 1,
+        distance: 40.,
+    };
+    let constraint2 = DistanceConstraint {
+        index_0: 1,
+        index_1: 2,
+        distance: 40.,
+    };
+    let constraint3 = DistanceConstraint {
+        index_0: 2,
+        index_1: 3,
+        distance: 40.,
+    };
+    let constraint4 = DistanceConstraint {
+        index_0: 3,
+        index_1: 0,
+        distance: 40.,
+    };
+    constraints.push(constraint);
+    constraints.push(constraint2);
 
     let top_wall = Line::new(vector![50., 50.], vector![500., 50.]);
     let left_wall = Line::new(vector![50., 500.], vector![50., 50.]);
@@ -85,6 +122,7 @@ async fn main() {
         for shape in &mut shapes {
             match shape {
                 Shape::Ball(ball) => {
+                    ball.force = vector![0., 0.];
                     let mut mouse_point_force = vector![0., 0.];
                     if is_mouse_button_down(MouseButton::Right) {
                         mouse_point_force =
@@ -95,7 +133,8 @@ async fn main() {
                     if input::is_key_down(KeyCode::Space) {
                         ball.force = vector![0., 0.];
                     } else {
-                        ball.force = gforce(ball.mass) + mouse_point_force;
+                        // ball.force += gforce(ball.mass) + mouse_point_force;
+                        ball.force += mouse_point_force;
                     }
                     ball.acceleration = ball.force / ball.mass;
                     let mut vel = calc_vel(&ball.velocity, &ball.acceleration, dt);
@@ -132,7 +171,6 @@ async fn main() {
                     } else {
                         ball.clicked = false;
                         ball_focused = false;
-                        ball.force = vector![0., 0.];
                         ball.color = WHITE;
                     }
 
@@ -160,8 +198,9 @@ async fn main() {
                             let collision_depth = d.magnitude() / 2.;
                             let normal = d.normalize();
                             let collision_1 =
-                                Collision::new(normal, collision_depth, ball1.elasticity);
-                            let collision_2 = Collision::new(-normal, 0., ball1.elasticity);
+                                Collision::new(normal, collision_depth / 2., ball1.elasticity);
+                            let collision_2 =
+                                Collision::new(-normal, collision_depth / 2., ball1.elasticity);
                             collisions.push((i, collision_1));
                             collisions.push((i + j + 1, collision_2));
                         }
@@ -178,7 +217,7 @@ async fn main() {
                             let collision =
                                 Collision::new(line.normal(), collision_depth, ball.elasticity);
                             let collision_2 =
-                                Collision::new(line.normal(), collision_depth, ball.elasticity);
+                                Collision::new(-line.normal(), collision_depth, ball.elasticity);
                             collisions.push((i, collision));
                             collisions.push((i + j + 1, collision_2));
                         }
@@ -205,6 +244,7 @@ async fn main() {
                     // TODO: change these function names to not be wall but just general collision since its not only wall
                     let pos_delta = wall_collision_position_delta(&collision);
 
+                    // TODO: remove elasticity from collision, should just be property of lines and balls
                     ball.translate_by(pos_delta);
                     let ball_vel = collision.elasticity * wall_collision_velocity(&collision, ball);
 
@@ -218,6 +258,44 @@ async fn main() {
             }
         }
         collisions.clear();
+
+        let mut offsets: Vec<(usize, Vector2<f32>)> = Vec::new();
+        for constraint in &constraints {
+            let p0 = &shapes[constraint.index_0];
+            let p1 = &shapes[constraint.index_1];
+            match (p0, p1) {
+                (Shape::Ball(ball1), Shape::Ball(ball2)) => {
+                    let delta = ball2.position - ball1.position;
+                    let total_correction = delta.magnitude() - constraint.distance;
+                    let norm = delta.normalize();
+                    let offset = norm * total_correction;
+                    // let distance = delta.magnitude();
+
+                    // let required_delta = delta * (constraint.distance / distance);
+                    // let offset = delta - required_delta;
+                    // println!(
+                    //     "delta {} \n distance {} \n constraint distance {}",
+                    //     delta, distance, constraint.distance
+                    // );
+                    offsets.push((constraint.index_0, offset / 2.));
+                    offsets.push((constraint.index_1, -offset / 2.));
+                }
+                _ => {}
+            }
+        }
+
+        for (i, offset) in &offsets {
+            let shape = &mut shapes[*i];
+            match shape {
+                Shape::Ball(ball) => {
+                    // println!("{}", offset);
+                    ball.position += offset;
+                }
+                _ => {}
+            }
+        }
+        offsets.clear();
+
         next_frame().await;
     }
 }

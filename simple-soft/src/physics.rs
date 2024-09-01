@@ -111,7 +111,6 @@ pub fn interpolate_mouse_force(
 pub fn wall_collision_velocity(collision: &Collision, ball: &Ball) -> Vector2<f32> {
     let normal = collision.normal;
     let unit_normal = normal.normalize();
-    let depth = collision.depth;
     let delta = unit_normal * ball.velocity.dot(&unit_normal);
     ball.velocity - 2. * delta
 }
@@ -122,4 +121,14 @@ pub fn wall_collision_position_delta(collision: &Collision) -> Vector2<f32> {
     let mut depth = collision.depth;
 
     -unit_normal * (depth)
+}
+
+pub fn collision_force(collision: &Collision, ball: &Ball) -> Vector2<f32> {
+    let normal = collision.normal;
+    let unit_normal = normal.normalize();
+    let depth = collision.depth;
+    let delta = 2. * unit_normal * ball.velocity.dot(&unit_normal);
+    let force = delta / 0.001;
+
+    force
 }
