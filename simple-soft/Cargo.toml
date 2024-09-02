@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 circular-buffer = "0.1.7"
+generational-arena = "0.2.9"
 macroquad = "0.4.13"
 nalgebra = "0.33.0"
 rand = "0.8.5"

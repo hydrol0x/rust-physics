@@ -50,7 +50,6 @@ impl Ball {
             friction: friction,
         }
     }
-
     pub fn new_default() -> Self {
         // Self {
         //     position: Vector2::new(0.0, 0.0),
@@ -69,6 +68,10 @@ impl Ball {
             0.8,
             5.0,
         )
+    }
+
+    pub fn set_mass(&mut self, mass: f32) {
+        self.mass = mass;
     }
 
     pub fn translate_to(mut self, position: Vector2<f32>) -> Self {
@@ -147,19 +150,57 @@ pub enum Shape {
     Line(Line),
 }
 
-pub fn ball_line_collision(ball: &Ball, line: &Line) -> bool {
-    // https://stackoverflow.com/a/1084899
-    let f = line.start_point - ball.position; // Vector from sphere center to line start point
-    let d = line.end_point - line.start_point; // Direction vector of the line
+// pub fn ball_line_collision(ball: &Ball, line: &Line) -> bool {
+//     // https://stackoverflow.com/a/1084899
+//     let f = line.start_point - ball.position; // Vector from sphere center to line start point
+//     let d = line.end_point - line.start_point; // Direction vector of the line
 
-    let a = d.dot(&d); // Dot product of direction vector with itself
-    let b = 2.0 * f.dot(&d); // 2 * dot product of f and direction vector
-    let c = f.dot(&f) - ball.radius * ball.radius; // Dot product of f with itself minus square of radius
+//     let a = d.dot(&d); // Dot product of direction vector with itself
+//     let b = 2.0 * f.dot(&d); // 2 * dot product of f and direction vector
+//     let c = f.dot(&f) - ball.radius * ball.radius; // Dot product of f with itself minus square of radius
+
+//     // Discriminant of the quadratic equation
+//     let discriminant = b * b - 4.0 * a * c;
+//     if discriminant < 0.0 {
+//         // No intersection
+//         false
+//     } else {
+//         // There is a potential intersection
+//         let discriminant_sqrt = discriminant.sqrt();
+
+//         // Calculate both t values for possible intersections
+//         let t1 = (-b - discriminant_sqrt) / (2.0 * a);
+//         let t2 = (-b + discriminant_sqrt) / (2.0 * a);
+
+//         // Check for the different intersection scenarios
+//         if (t1 >= 0.0 && t1 <= 1.0) || (t2 >= 0.0 && t2 <= 1.0) {
+//             // Impale, Poke, or ExitWound
+//             true
+//         } else {
+//             // No valid intersection found
+//             false
+//         }
+//     }
+// }
+
+pub fn ball_line_collision(ball: &Ball, line: &Line) -> bool {
+    // Small epsilon value for floating-point comparisons
+    let eps = 1e-6;
+
+    // Vector from sphere center to line start point
+    let f = line.start_point - ball.position;
+    // Direction vector of the line
+    let d = line.end_point - line.start_point;
+
+    // Dot products for quadratic formula
+    let a = d.dot(&d);
+    let b = 2.0 * f.dot(&d);
+    let c = f.dot(&f) - ball.radius * ball.radius;
 
     // Discriminant of the quadratic equation
     let discriminant = b * b - 4.0 * a * c;
-    if discriminant < 0.0 {
-        // No intersection
+    if discriminant < -eps {
+        // No intersection if the discriminant is less than a small negative epsilon
         false
     } else {
         // There is a potential intersection
@@ -169,8 +210,8 @@ pub fn ball_line_collision(ball: &Ball, line: &Line) -> bool {
         let t1 = (-b - discriminant_sqrt) / (2.0 * a);
         let t2 = (-b + discriminant_sqrt) / (2.0 * a);
 
-        // Check for the different intersection scenarios
-        if (t1 >= 0.0 && t1 <= 1.0) || (t2 >= 0.0 && t2 <= 1.0) {
+        // Check for the different intersection scenarios with epsilon tolerance
+        if (t1 >= -eps && t1 <= 1.0 + eps) || (t2 >= -eps && t2 <= 1.0 + eps) {
             // Impale, Poke, or ExitWound
             true
         } else {
@@ -199,9 +240,22 @@ pub fn line_line_norm_component(line_1: &Line, line_2: &Line) -> Vector2<f32> {
     line_norm_component(&d, line_2)
 }
 
+// pub fn ball_ball_collision(ball_1: &Ball, ball_2: &Ball) -> bool {
+//     let d = ball_2.position - ball_1.position;
+//     if d.magnitude() < (2.0 * ball_1.radius.max(ball_2.radius)) {
+//         return true;
+//     }
+//     false
+// }
+
 pub fn ball_ball_collision(ball_1: &Ball, ball_2: &Ball) -> bool {
+    // Small epsilon value for floating-point comparisons
+    let eps = 1e-6;
+
+    // Distance vector between the centers of the two balls
     let d = ball_2.position - ball_1.position;
-    if d.magnitude() < (2.0 * ball_1.radius.max(ball_2.radius)) {
+    // Compare the distance magnitude with the sum of the radii, adjusted with epsilon
+    if d.magnitude() < (ball_1.radius + ball_2.radius + eps) {
         return true;
     }
     false

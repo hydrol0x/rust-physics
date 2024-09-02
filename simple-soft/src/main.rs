@@ -1,22 +1,27 @@
 use std::default;
 
 use constraints::Constraint;
+use constraints::ConstraintUpdate;
+use constraints::FixedPointConstraint;
 use constraints::SpringConstraint;
-use na::constraint;
-use na::min;
 use physics::collision_position_delta;
 use physics::elastic_collision_velocity;
 use physics::interpolate_mouse_force;
-use physics::point_force;
+use solver::EntityState;
+use solver::RungeKuttaIntegrator;
+extern crate generational_arena;
 extern crate nalgebra as na;
 
 mod physics;
 
 mod shapes;
 
-use physics::collision_force;
+mod solver;
+
 use physics::wall_collision_velocity;
 use physics::Collision;
+use physics::ForceGenerator;
+use physics::GlobalForceGenerator;
 use physics::PointForceGenerator;
 use renderer::render_ball;
 use renderer::render_point_force_generator;
@@ -48,16 +53,18 @@ use constraints::DistanceConstraint;
 // }
 
 async fn main() {
-    let N = 10; // number of balls
+    let N = 100; // number of balls
     let MAX_VELOCITY = 1000.;
-    let dt = 0.1;
+    let mut dt = 0.1;
+    let mut FPS = false;
+    let mut GRAVITY = false;
 
     fn generate_balls(n: u32, shapes: &mut Vec<Shape>) {
         let mut rng = ::rand::thread_rng();
         for i in 0..n {
             let mut ball = Ball::new_default();
-            let x: f32 = rng.gen_range(55..=400) as f32;
-            let y: f32 = rng.gen_range(55..=400) as f32;
+            let x: f32 = rng.gen_range(55..=900) as f32;
+            let y: f32 = rng.gen_range(55..=900) as f32;
             let vx: f32 = rng.gen_range(-0..=0) as f32;
             let vy: f32 = rng.gen_range(-0..=0) as f32;
             let position = vector![x, y];
@@ -73,34 +80,61 @@ async fn main() {
     let mut shapes: Vec<Shape> = Vec::new();
     generate_balls(N, &mut shapes);
 
-    // shapes.push(Shape::Ball(
-    //     Ball::new_default().translate_to(vector![110., 100.]),
-    // ));
-    // shapes.push(Shape::Ball(
-    //     Ball::new_default().translate_to(vector![115., 100.]),
-    // ));
-    // shapes.push(Shape::Ball(
-    //     Ball::new_default().translate_to(vector![120., 100.]),
-    // ));
-    // shapes.push(Shape::Ball(
-    //     Ball::new_default().translate_to(vector![130., 100.]),
-    // ));
-    // shapes.push(Shape::Ball(
-    //     Ball::new_default().translate_to(vector![112., 100.]),
-    // ));
+    let s = 100.;
+    // let mut ball1 = Ball::new_default().translate_to(vector![150., 100.]);
+    // let ball2 = ball1.clone().translate_to(vector![100., 110.]);
+    // shapes.push(Shape::Ball(ball1));
+    // // shapes.push(Shape::Ball(ball2));
+    shapes.push(Shape::Ball(
+        Ball::new_default().translate_to(vector![100., 100.]),
+    ));
+    shapes.push(Shape::Ball(
+        Ball::new_default().translate_to(vector![100. + s, 100.]),
+    ));
+    shapes.push(Shape::Ball(
+        Ball::new_default().translate_to(vector![100. + s, 100. + s]),
+    ));
+    shapes.push(Shape::Ball(
+        Ball::new_default().translate_to(vector![100., 100. + s]),
+    ));
+
     let mut collisions: Vec<(usize, Collision)> = Vec::new();
+    let damp = 0.1;
+    let k = 10.;
+    let constraint = SpringConstraint {
+        index_0: 0,
+        index_1: 1,
+        k: k,
+        dampen: damp,
+        distance: s,
+    };
+    let constraint2 = SpringConstraint {
+        index_0: 1,
+        index_1: 2,
+        k: k,
+        dampen: damp,
+        distance: s,
+    };
+    let constraint3 = SpringConstraint {
+        index_0: 2,
+        index_1: 0,
+        k: k,
+        dampen: damp,
+        distance: s,
+    };
 
-    let mut constraint = SpringConstraint::default();
-    constraint.index_0 = 0;
-    constraint.index_1 = 1;
-    constraint.distance = 40.;
-    constraint.k = 20.;
+    let constraint7 = FixedPointConstraint {
+        index: 0,
+        position: vector![100., 100.],
+    };
     constraints.push(Constraint::Spring(constraint));
+    constraints.push(Constraint::Spring(constraint2));
+    constraints.push(Constraint::Spring(constraint3));
 
-    let top_wall = Line::new(vector![50., 50.], vector![500., 50.]);
-    let left_wall = Line::new(vector![50., 500.], vector![50., 50.]);
-    let right_wall = Line::new(vector![500., 50.], vector![500., 500.]);
-    let bottom_wall = Line::new(vector![500., 500.], vector![50., 500.]);
+    let top_wall = Line::new(vector![50., 50.], vector![1000., 50.]);
+    let left_wall = Line::new(vector![50., 1000.], vector![50., 50.]);
+    let right_wall = Line::new(vector![1000., 50.], vector![1000., 1000.]);
+    let bottom_wall = Line::new(vector![1000., 1000.], vector![50., 1000.]);
 
     shapes.push(Shape::Line(bottom_wall));
     shapes.push(Shape::Line(top_wall));
@@ -115,7 +149,14 @@ async fn main() {
     let mut ball_focused = false;
 
     let mut mouse_point_force_generator = PointForceGenerator::new(10., vector![0., 0.]);
+    use std::time::Instant;
+
+    let forces: Vec<Box<dyn ForceGenerator>> =
+        vec![Box::new(GlobalForceGenerator::new(10., vector![0., 1.]))];
+
+    let mut t = 0.;
     loop {
+        let now: Instant = Instant::now();
         // println!("{:?}", collisions);
         // TODO: have a general shapes vector (enum?) and match over the shape type to drawline drawcircle etc
         clear_background(RED);
@@ -126,47 +167,32 @@ async fn main() {
             // reset
             shapes = initial_state.clone();
         }
+        if input::is_key_pressed(KeyCode::M) {
+            dt *= 2.;
+        }
+        if input::is_key_pressed(KeyCode::N) {
+            dt /= 2.;
+        }
+        if input::is_key_pressed(KeyCode::F) {
+            FPS = !FPS;
+        }
+        if input::is_key_pressed(KeyCode::Space) {
+            GRAVITY = !GRAVITY;
+        }
+
         for shape in &mut shapes {
             match shape {
                 Shape::Ball(ball) => {
-                    let vel_mag = ball.velocity.magnitude();
-                    // if vel_mag > MAX_VELOCITY {
-                    //     ball.velocity = MAX_VELOCITY * ball.velocity.normalize();
-                    //     println!("Vel: {} > MAX_VEL. New Vel {}", vel_mag, ball.velocity);
-                    // }
+                    let integrator = RungeKuttaIntegrator::new(dt);
 
-                    ball.force = vector![0., 0.];
-                    let mut mouse_point_force = vector![0., 0.];
-                    if is_mouse_button_down(MouseButton::Right) {
-                        mouse_point_force =
-                            point_force(&ball.position, &mouse_point_force_generator);
-                        render_point_force_generator(&mouse_point_force_generator);
-                    }
-
-                    if input::is_key_down(KeyCode::Space) {
-                        ball.force = vector![0., 0.];
-                    } else {
-                        ball.force += gforce(ball.mass) + mouse_point_force;
-                    }
-                    ball.acceleration = ball.force / ball.mass;
-                    let mut vel = calc_vel(&ball.velocity, &ball.acceleration, dt);
-                    if vel.magnitude() < 0.5 {
-                        vel = vector![0., 0.];
-                    }
-                    ball.velocity = vel;
-                    ball.position = calc_pos(&ball.position, &ball.velocity, dt);
-                    render_ball(ball);
-
-                    // if is_mouse_button_down(MouseButton::Right) && ball.clicked {
-                    //     ball.position = mpoint;
-                    //     ball.velocity = vector![0., 0.];
-                    //     ball.force = vector![0., 0.];
-                    // }
+                    let state = EntityState {
+                        velocity: ball.velocity,
+                        position: ball.position,
+                        mass: ball.mass,
+                    };
 
                     if is_mouse_button_down(MouseButton::Left) {
                         if ball.clicked {
-                            // ball.velocity = vector![0., 0.];
-
                             ball.velocity = interpolate_mouse_force(
                                 ball.position,
                                 mpoint,
@@ -186,18 +212,21 @@ async fn main() {
                         ball.color = WHITE;
                     }
 
-                    // if ball_point_collision(&ball, &mpoint) {
-                    //     if is_mouse_button_down(MouseButton::Left) {
-                    //         ball.position = mpoint;
-                    //     }
-                    //     ball.color = BLACK;
-                    // } else {
-                    //     ball.color = WHITE;
+                    // let net_force = (&state, &forces);
+                    let (x_update, v_update) = integrator.integrate(&state, &forces, t);
+
+                    // if vel.magnitude() < 0.05 {
+                    //     vel = vector![0., 0.];
                     // }
+
+                    ball.velocity += v_update;
+                    ball.position += x_update;
+                    render_ball(ball);
                 }
                 Shape::Line(line) => render_line(&line),
             }
         }
+        t += dt;
 
         for (i, obj1) in shapes.iter().enumerate() {
             for (j, obj2) in shapes[i + 1..].iter().enumerate() {
@@ -221,16 +250,20 @@ async fn main() {
 
                             // used for normal and for position transform
                             let d = ball2.position - ball1.position;
+                            let distance = d.magnitude();
+                            if distance < 1e-6 {
+                                return;
+                            } // Avoid division by zero or very small distances
                             let total_radius = ball1.radius + ball2.radius;
-                            let collision_depth = total_radius - d.magnitude();
-                            let normal = d.normalize();
+                            let collision_depth = total_radius - distance;
+                            let normal = d / distance;
 
                             let mass_sum = m_a + m_b;
                             let translate_by = collision_position_delta(normal, collision_depth);
 
                             // Tranlsations are prop. to the masses of the balls - i.e when equal, is equivalnet to just dividing translation equally.
-                            let translate_by_a = (1. * translate_by * (m_b / mass_sum)) / 2.;
-                            let translate_by_b = (translate_by * (m_a / mass_sum)) / 2.;
+                            let translate_by_a = (translate_by * (m_b / mass_sum));
+                            let translate_by_b = (translate_by * (m_a / mass_sum));
 
                             let (vf_a, vf_b) = elastic_collision_velocity(ball1, ball2);
 
@@ -346,43 +379,115 @@ async fn main() {
         }
         collisions.clear();
 
-        let mut offsets: Vec<(usize, Vector2<f32>)> = Vec::new();
+        let mut updates: Vec<ConstraintUpdate> = Vec::new();
         for constraint in &constraints {
-            let p0 = &shapes[constraint.index_0];
-            let p1 = &shapes[constraint.index_1];
-            match (p0, p1) {
-                (Shape::Ball(ball1), Shape::Ball(ball2)) => {
-                    let delta = ball2.position - ball1.position;
-                    let total_correction = delta.magnitude() - constraint.distance;
-                    let norm = delta.normalize();
-                    let offset = norm * total_correction;
-                    // let distance = delta.magnitude();
+            match constraint {
+                (Constraint::Spring(constraint)) => {
+                    if let (Shape::Ball(ball1), Shape::Ball(ball2)) =
+                        (&shapes[constraint.index_0], &shapes[constraint.index_1])
+                    {
+                        // Calculate the delta between ball positions
+                        let p0 = ball1.position;
+                        let p1 = ball2.position;
+                        let v0 = ball1.velocity;
+                        let v1 = ball2.velocity;
 
-                    // let required_delta = delta * (constraint.distance / distance);
-                    // let offset = delta - required_delta;
-                    // println!(
-                    //     "delta {} \n distance {} \n constraint distance {}",
-                    //     delta, distance, constraint.distance
-                    // );
-                    offsets.push((constraint.index_0, offset / 2.));
-                    offsets.push((constraint.index_1, -offset / 2.));
+                        let delta = p1 - p0;
+                        let distance = delta.magnitude();
+                        let direction = delta / distance;
+
+                        let required_delta = direction * constraint.distance;
+                        let force = constraint.k * (required_delta - delta);
+
+                        let mut update_1 = ConstraintUpdate::default();
+                        let mut update_2 = ConstraintUpdate::default();
+
+                        // Update velocities due to spring force
+                        update_1.velocity_update = -force * dt / ball1.mass;
+                        update_2.velocity_update = force * dt / ball2.mass;
+
+                        // Calculate relative velocity along the direction of the spring
+                        let vrel = (v1 - v0).dot(&direction);
+
+                        // Apply damping factor
+                        let damping_factor = (-constraint.k * dt).exp();
+                        let new_vrel = vrel * damping_factor;
+                        let vrel_delta = new_vrel - vrel;
+                        let vrel_delta_vec = vrel_delta * direction;
+                        // Update velocities due to damping
+                        update_1.velocity_update += -vrel_delta_vec / 2.0;
+                        update_2.velocity_update += vrel_delta_vec / 2.0;
+
+                        update_1.index = constraint.index_0;
+                        update_2.index = constraint.index_1;
+
+                        updates.push(update_1);
+                        updates.push(update_2);
+                        // Optionally: Draw the spring
+                        render_line(&Line::new(ball1.position, ball2.position));
+                    }
                 }
-                _ => {}
+                (Constraint::Distance(constraint)) => {
+                    if let (Shape::Ball(ball1), Shape::Ball(ball2)) =
+                        (&shapes[constraint.index_0], &shapes[constraint.index_1])
+                    {
+                        let delta = ball2.position - ball1.position;
+                        let total_correction = delta.magnitude() - constraint.distance;
+                        let norm = delta.normalize();
+                        let offset = norm * total_correction;
+
+                        let mut update_1 = ConstraintUpdate::default();
+                        let mut update_2 = ConstraintUpdate::default();
+
+                        update_1.position_update = offset / 2.;
+                        update_2.position_update = -offset / 2.;
+
+                        update_1.index = constraint.index_0;
+                        update_2.index = constraint.index_1;
+
+                        updates.push(update_1);
+                        updates.push(update_2);
+                    }
+                }
+                (Constraint::FixedPoint(constraint)) => {
+                    if let (Shape::Ball(ball)) = &shapes[constraint.index] {
+                        let delta = ball.position - constraint.position;
+                        let mut update = ConstraintUpdate::default();
+                        update.position_update = -delta;
+                        update.index = constraint.index;
+                        updates.push(update);
+                    }
+                }
             }
         }
 
-        for (i, offset) in &offsets {
-            let shape = &mut shapes[*i];
+        for update in &updates {
+            let shape = &mut shapes[update.index];
             match shape {
                 Shape::Ball(ball) => {
-                    // println!("{}", offset);
-                    ball.position += offset;
+                    ball.position += update.position_update;
+                    ball.color = BLUE;
+                    ball.velocity += update.velocity_update;
+                    // ball.force += update.force_update;
                 }
                 _ => {}
             }
         }
-        offsets.clear();
+        updates.clear();
 
+        draw_text(format!("{}", dt).as_str(), 100., 20.0, 20.0, WHITE);
+        let elapsed = now.elapsed();
+        let mut fps_count = 0;
+        fps_count = 1000 / elapsed.as_millis().max(1);
+        if FPS {
+            draw_text(
+                format!("FPS: {}", fps_count).as_str(),
+                100.,
+                40.0,
+                20.0,
+                WHITE,
+            );
+        }
         next_frame().await;
     }
 }

@@ -1,8 +1,12 @@
 use std::{cmp, f32::NEG_INFINITY};
 
-use na::{vector, UnitVector2, Vector, Vector2};
+use generational_arena::Arena;
+use na::{vector, Matrix1, UnitVector2, Vector, Vector1, Vector2};
 
-use crate::shapes::{Ball, Line};
+use crate::{
+    shapes::{Ball, Line, Shape},
+    solver::EntityState,
+};
 
 #[derive(Debug)]
 pub struct Collision {
@@ -14,13 +18,18 @@ impl Collision {
         Self { translate_by, vf }
     }
 }
-enum ForceGenerator {
-    PointForce(PointForceGenerator),
-    GlobalForce(GlobalForceGenerator),
+
+pub trait ForceGenerator {
+    // fn accumulate(&self, entity_index: usize, force: &Vector2<f32>) -> Vector2<f32>;
+    fn accumulate(&self, entity_state: &EntityState, force: &Vector2<f32>) -> Vector2<f32>;
 }
+// pub enum ForceGenerator {
+//     PointForce(PointForceGenerator),
+//     GlobalForce(GlobalForceGenerator),
+// }
 
 pub struct PointForceGenerator {
-    // acts as an attractive or repulsive force of charge `strength` and assuming all objects have a 'charge' of 1
+    // Applies acceleration of strength `strength` to any object in scene, oriented towards the position of the force generator
     pub strength: f32,
     pub position: Vector2<f32>,
 }
@@ -31,12 +40,12 @@ impl PointForceGenerator {
     }
 }
 
-pub fn point_force(point: &Vector2<f32>, force_generator: &PointForceGenerator) -> Vector2<f32> {
-    // 1/r dropoff
-    let d = force_generator.position - point;
-    let unit = d.normalize();
-    let force = force_generator.strength;
-    force * unit
+impl ForceGenerator for PointForceGenerator {
+    fn accumulate(self: &Self, entity_state: &EntityState, force: &Vector2<f32>) -> Vector2<f32> {
+        let d = self.position - entity_state.position;
+        let unit = d.normalize();
+        force + self.strength * unit
+    }
 }
 
 pub struct GlobalForceGenerator {
@@ -57,8 +66,14 @@ impl GlobalForceGenerator {
     }
 }
 
+impl ForceGenerator for GlobalForceGenerator {
+    fn accumulate(self: &Self, state: &EntityState, force: &Vector2<f32>) -> Vector2<f32> {
+        force + self.strength * self.direction
+    }
+}
+
 pub fn gforce(mass: f32) -> Vector2<f32> {
-    let gravity_generator = GlobalForceGenerator::new(9.8, vector![0., 1.]);
+    let gravity_generator = GlobalForceGenerator::new(10., vector![0., 1.]);
     mass * gravity_generator.force()
 }
 
@@ -208,4 +223,12 @@ pub fn collision_force(normal: Vector2<f32>, ball: &Ball) -> Vector2<f32> {
     let force = delta / 0.001;
 
     force
+}
+
+pub fn project(a: &Vector2<f32>, b: &Vector2<f32>) -> Vector2<f32> {
+    // projection of b on a
+    if a.magnitude() == 0. {
+        return vector![0., 0.];
+    }
+    a * (a.dot(b)) / a.magnitude()
 }
