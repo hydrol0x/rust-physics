@@ -65,7 +65,7 @@ impl Ball {
             vector![0., 0.],
             1.0,
             10.0,
-            0.8,
+            0.2,
             5.0,
         )
     }
@@ -103,7 +103,7 @@ impl Line {
             end_point: end,
             color: BLACK,
             d: end - start,
-            elasticity: 1.,
+            elasticity: 0.8,
             friction: 10.,
             mass: INFINITY,
         }

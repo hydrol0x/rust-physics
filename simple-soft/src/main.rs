@@ -1,4 +1,5 @@
 use std::default;
+use std::f32::EPSILON;
 
 use constraints::Constraint;
 use constraints::ConstraintUpdate;
@@ -7,6 +8,7 @@ use constraints::SpringConstraint;
 use physics::collision_position_delta;
 use physics::elastic_collision_velocity;
 use physics::interpolate_mouse_force;
+use physics::SpringForceGenerator;
 use solver::EntityState;
 use solver::RungeKuttaIntegrator;
 extern crate generational_arena;
@@ -21,7 +23,7 @@ mod solver;
 use physics::wall_collision_velocity;
 use physics::Collision;
 use physics::ForceGenerator;
-use physics::GlobalForceGenerator;
+use physics::ObjectForceGenerator;
 use physics::PointForceGenerator;
 use renderer::render_ball;
 use renderer::render_point_force_generator;
@@ -39,7 +41,7 @@ mod renderer;
 use renderer::render_line;
 
 use na::{vector, Vector2};
-use physics::{calc_pos, calc_vel, gforce};
+use physics::{calc_pos, calc_vel};
 
 use ::rand::Rng;
 
@@ -53,7 +55,7 @@ use constraints::DistanceConstraint;
 // }
 
 async fn main() {
-    let N = 100; // number of balls
+    let N = 7; // number of balls
     let MAX_VELOCITY = 1000.;
     let mut dt = 0.1;
     let mut FPS = false;
@@ -80,56 +82,7 @@ async fn main() {
     let mut shapes: Vec<Shape> = Vec::new();
     generate_balls(N, &mut shapes);
 
-    let s = 100.;
-    // let mut ball1 = Ball::new_default().translate_to(vector![150., 100.]);
-    // let ball2 = ball1.clone().translate_to(vector![100., 110.]);
-    // shapes.push(Shape::Ball(ball1));
-    // // shapes.push(Shape::Ball(ball2));
-    shapes.push(Shape::Ball(
-        Ball::new_default().translate_to(vector![100., 100.]),
-    ));
-    shapes.push(Shape::Ball(
-        Ball::new_default().translate_to(vector![100. + s, 100.]),
-    ));
-    shapes.push(Shape::Ball(
-        Ball::new_default().translate_to(vector![100. + s, 100. + s]),
-    ));
-    shapes.push(Shape::Ball(
-        Ball::new_default().translate_to(vector![100., 100. + s]),
-    ));
-
     let mut collisions: Vec<(usize, Collision)> = Vec::new();
-    let damp = 0.1;
-    let k = 10.;
-    let constraint = SpringConstraint {
-        index_0: 0,
-        index_1: 1,
-        k: k,
-        dampen: damp,
-        distance: s,
-    };
-    let constraint2 = SpringConstraint {
-        index_0: 1,
-        index_1: 2,
-        k: k,
-        dampen: damp,
-        distance: s,
-    };
-    let constraint3 = SpringConstraint {
-        index_0: 2,
-        index_1: 0,
-        k: k,
-        dampen: damp,
-        distance: s,
-    };
-
-    let constraint7 = FixedPointConstraint {
-        index: 0,
-        position: vector![100., 100.],
-    };
-    constraints.push(Constraint::Spring(constraint));
-    constraints.push(Constraint::Spring(constraint2));
-    constraints.push(Constraint::Spring(constraint3));
 
     let top_wall = Line::new(vector![50., 50.], vector![1000., 50.]);
     let left_wall = Line::new(vector![50., 1000.], vector![50., 50.]);
@@ -140,38 +93,65 @@ async fn main() {
     shapes.push(Shape::Line(top_wall));
     shapes.push(Shape::Line(left_wall));
     shapes.push(Shape::Line(right_wall));
-    // ball_2.velocity = vector![0., -30.];
 
-    // println!("{}", point_line_distance(line, point));
-    // println!("{:?}", collisions);
     let initial_state: Vec<Shape> = shapes.clone();
 
     let mut ball_focused = false;
 
-    let mut mouse_point_force_generator = PointForceGenerator::new(10., vector![0., 0.]);
+    let constraint1 = SpringConstraint {
+        index_0: 0,
+        index_1: 1,
+        distance: 50.,
+        k: 50.,
+        dampen: 0.1,
+    };
+    let constraint2 = SpringConstraint {
+        index_0: 1,
+        index_1: 2,
+        distance: 50.,
+        k: 50.,
+        dampen: 0.1,
+    };
+    let constraint3 = SpringConstraint {
+        index_0: 2,
+        index_1: 0,
+        distance: 50.,
+        k: 50.,
+        dampen: 0.1,
+    };
+    constraints.push(Constraint::Spring(constraint1));
+    constraints.push(Constraint::Spring(constraint2));
+    constraints.push(Constraint::Spring(constraint3));
+
+    let dist1 = DistanceConstraint::new(4, 5, 40.);
+    let dist2 = DistanceConstraint::new(5, 6, 40.);
+    let dist3 = DistanceConstraint::new(6, 4, 40.);
+
+    constraints.push(Constraint::Distance(dist1));
+    constraints.push(Constraint::Distance(dist2));
+    constraints.push(Constraint::Distance(dist3));
+
     use std::time::Instant;
 
-    let forces: Vec<Box<dyn ForceGenerator>> =
-        vec![Box::new(GlobalForceGenerator::new(10., vector![0., 1.]))];
-
     let mut t = 0.;
+    let mut integrator = RungeKuttaIntegrator::new(dt);
     loop {
+        let mut forces: Vec<Box<dyn ForceGenerator>> = Vec::new();
         let now: Instant = Instant::now();
-        // println!("{:?}", collisions);
-        // TODO: have a general shapes vector (enum?) and match over the shape type to drawline drawcircle etc
         clear_background(RED);
+
         let mpos = input::mouse_position();
         let mpoint = vector![mpos.0, mpos.1];
-        mouse_point_force_generator.position = mpoint;
+
         if input::is_key_down(KeyCode::R) {
             // reset
             shapes = initial_state.clone();
         }
         if input::is_key_pressed(KeyCode::M) {
-            dt *= 2.;
+            integrator.increase_dt();
         }
         if input::is_key_pressed(KeyCode::N) {
-            dt /= 2.;
+            integrator.decrease_dt();
         }
         if input::is_key_pressed(KeyCode::F) {
             FPS = !FPS;
@@ -180,26 +160,30 @@ async fn main() {
             GRAVITY = !GRAVITY;
         }
 
-        for shape in &mut shapes {
+        for (i, shape) in shapes.iter_mut().enumerate() {
             match shape {
                 Shape::Ball(ball) => {
-                    let integrator = RungeKuttaIntegrator::new(dt);
+                    // let mut mouse_point_force_generator =
+                    //     PointForceGenerator::new(10., vector![0., 0.], i);
+                    // mouse_point_force_generator.position = mpoint;
+                    // forces.push(Box::new(mouse_point_force_generator));
 
-                    let state = EntityState {
-                        velocity: ball.velocity,
-                        position: ball.position,
-                        mass: ball.mass,
-                    };
-
+                    let gravity = ObjectForceGenerator::new(9.8, vector![0., 1.], i);
+                    forces.push(Box::new(gravity));
                     if is_mouse_button_down(MouseButton::Left) {
                         if ball.clicked {
-                            ball.velocity = interpolate_mouse_force(
+                            let force = interpolate_mouse_force(
                                 ball.position,
                                 mpoint,
                                 ball.velocity,
-                                30. / dt,
+                                30. / integrator.dt(),
                                 0.9,
-                            )
+                            );
+                            println!("{}", force);
+                            ball.velocity = force;
+                            // let drag: ObjectForceGenerator =
+                            // ObjectForceGenerator::new(0., force.normalize(), i);
+                            // forces.push(Box::new(drag));
                         } else if !ball_focused && ball_point_collision(&ball, &mpoint, 20.0) {
                             ball.clicked = true;
                             ball_focused = true;
@@ -212,21 +196,11 @@ async fn main() {
                         ball.color = WHITE;
                     }
 
-                    // let net_force = (&state, &forces);
-                    let (x_update, v_update) = integrator.integrate(&state, &forces, t);
-
-                    // if vel.magnitude() < 0.05 {
-                    //     vel = vector![0., 0.];
-                    // }
-
-                    ball.velocity += v_update;
-                    ball.position += x_update;
                     render_ball(ball);
                 }
                 Shape::Line(line) => render_line(&line),
             }
         }
-        t += dt;
 
         for (i, obj1) in shapes.iter().enumerate() {
             for (j, obj2) in shapes[i + 1..].iter().enumerate() {
@@ -402,6 +376,18 @@ async fn main() {
                         let mut update_1 = ConstraintUpdate::default();
                         let mut update_2 = ConstraintUpdate::default();
 
+                        // let force = ObjectForceGenerator {
+                        //     strength: force.magnitude(),
+                        //     direction: force.normalize(),
+                        //     entity_idx: constraint.index_0,
+                        // };
+
+                        // let force2 = ObjectForceGenerator {
+                        //     strength: force.magnitude(),
+                        //     direction: force.normalize(),
+                        //     entity_idx: constraint.index_0,
+                        // };
+
                         // Update velocities due to spring force
                         update_1.velocity_update = -force * dt / ball1.mass;
                         update_2.velocity_update = force * dt / ball2.mass;
@@ -414,6 +400,7 @@ async fn main() {
                         let new_vrel = vrel * damping_factor;
                         let vrel_delta = new_vrel - vrel;
                         let vrel_delta_vec = vrel_delta * direction;
+
                         // Update velocities due to damping
                         update_1.velocity_update += -vrel_delta_vec / 2.0;
                         update_2.velocity_update += vrel_delta_vec / 2.0;
@@ -421,6 +408,24 @@ async fn main() {
                         update_1.index = constraint.index_0;
                         update_2.index = constraint.index_1;
 
+                        // let force = SpringForceGenerator {
+                        //     b: constraint.dampen,
+                        //     k: constraint.k,
+                        //     length: constraint.distance,
+                        //     displacement: delta / 2.,
+                        //     entity_idx: constraint.index_0,
+                        // };
+
+                        // let force2 = SpringForceGenerator {
+                        //     b: constraint.dampen,
+                        //     k: constraint.k,
+                        //     length: constraint.distance,
+                        //     displacement: -delta / 2.,
+                        //     entity_idx: constraint.index_1,
+                        // };
+
+                        // forces.push(Box::new(force));
+                        // forces.push(Box::new(force2));
                         updates.push(update_1);
                         updates.push(update_2);
                         // Optionally: Draw the spring
@@ -475,7 +480,13 @@ async fn main() {
         }
         updates.clear();
 
-        draw_text(format!("{}", dt).as_str(), 100., 20.0, 20.0, WHITE);
+        draw_text(
+            format!("{}", integrator.dt()).as_str(),
+            100.,
+            20.0,
+            20.0,
+            WHITE,
+        );
         let elapsed = now.elapsed();
         let mut fps_count = 0;
         fps_count = 1000 / elapsed.as_millis().max(1);
@@ -488,6 +499,30 @@ async fn main() {
                 WHITE,
             );
         }
+
+        for force in &forces {
+            let idx = force.get_entity_idx();
+            // TODO: have trait of shapes be that they have EntityState, then for line make start pos and end pos a fn and have line be defined
+            // normally with 'x' in entity state (pos), and then a norm vector and a length, so x is start point, norm is direction of line
+            // for v just always 0 uness implement v for lines
+
+            // TODO: set velocity to 0 if very small
+            if let Shape::Ball(ball) = &mut shapes[idx] {
+                let state = EntityState {
+                    velocity: ball.velocity,
+                    position: ball.position,
+                    mass: ball.mass,
+                };
+
+                let (x_update, v_update) = integrator.integrate(&state, &forces, t);
+                // println!("x update {:?}", x_update);
+                // println!("v update {:?}", v_update);
+
+                ball.velocity += v_update;
+                ball.position += x_update;
+            };
+        }
+        t += dt;
         next_frame().await;
     }
 }

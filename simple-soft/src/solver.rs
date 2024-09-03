@@ -78,7 +78,6 @@ impl RungeKuttaIntegrator {
         new_derivative.dv = calculate_net_acceleration(initial, forces, t + dt);
         new_derivative
     }
-
     pub fn integrate(
         self: &Self,
         state: &EntityState,
@@ -110,5 +109,13 @@ impl RungeKuttaIntegrator {
 
     pub fn dt(self: &Self) -> f32 {
         self.dt
+    }
+
+    pub fn increase_dt(self: &mut Self) {
+        self.dt *= 2.;
+    }
+
+    pub fn decrease_dt(self: &mut Self) {
+        self.dt /= 2.;
     }
 }

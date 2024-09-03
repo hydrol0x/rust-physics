@@ -22,21 +22,23 @@ impl Collision {
 pub trait ForceGenerator {
     // fn accumulate(&self, entity_index: usize, force: &Vector2<f32>) -> Vector2<f32>;
     fn accumulate(&self, entity_state: &EntityState, force: &Vector2<f32>) -> Vector2<f32>;
+    fn get_entity_idx(&self) -> usize;
 }
-// pub enum ForceGenerator {
-//     PointForce(PointForceGenerator),
-//     GlobalForce(GlobalForceGenerator),
-// }
-
+#[derive(Debug)]
 pub struct PointForceGenerator {
     // Applies acceleration of strength `strength` to any object in scene, oriented towards the position of the force generator
     pub strength: f32,
     pub position: Vector2<f32>,
+    pub entity_idx: usize,
 }
 
 impl PointForceGenerator {
-    pub fn new(strength: f32, position: Vector2<f32>) -> Self {
-        Self { strength, position }
+    pub fn new(strength: f32, position: Vector2<f32>, entity_idx: usize) -> Self {
+        Self {
+            strength,
+            position,
+            entity_idx,
+        }
     }
 }
 
@@ -46,18 +48,44 @@ impl ForceGenerator for PointForceGenerator {
         let unit = d.normalize();
         force + self.strength * unit
     }
+    fn get_entity_idx(&self) -> usize {
+        self.entity_idx
+    }
 }
 
-pub struct GlobalForceGenerator {
+#[derive(Default, Debug, Clone)]
+pub struct SpringForceGenerator {
+    pub k: f32,
+    pub b: f32,
+    pub length: f32,
+    pub displacement: Vector2<f32>,
+    pub entity_idx: usize,
+}
+
+impl ForceGenerator for SpringForceGenerator {
+    fn accumulate(&self, entity_state: &EntityState, force: &Vector2<f32>) -> Vector2<f32> {
+        // F = kx - bv
+        self.k * self.displacement - self.b * entity_state.velocity
+    }
+    fn get_entity_idx(&self) -> usize {
+        self.entity_idx
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct ObjectForceGenerator {
+    // apply force to object
     pub strength: f32,
     pub direction: Vector2<f32>,
+    pub entity_idx: usize,
 }
 
-impl GlobalForceGenerator {
-    pub fn new(strength: f32, direction: Vector2<f32>) -> Self {
+impl ObjectForceGenerator {
+    pub fn new(strength: f32, direction: Vector2<f32>, entity_idx: usize) -> Self {
         Self {
             strength,
             direction: direction.normalize(),
+            entity_idx,
         }
     }
 
@@ -66,16 +94,19 @@ impl GlobalForceGenerator {
     }
 }
 
-impl ForceGenerator for GlobalForceGenerator {
+impl ForceGenerator for ObjectForceGenerator {
     fn accumulate(self: &Self, state: &EntityState, force: &Vector2<f32>) -> Vector2<f32> {
         force + self.strength * self.direction
     }
+    fn get_entity_idx(&self) -> usize {
+        self.entity_idx
+    }
 }
 
-pub fn gforce(mass: f32) -> Vector2<f32> {
-    let gravity_generator = GlobalForceGenerator::new(10., vector![0., 1.]);
-    mass * gravity_generator.force()
-}
+// pub fn gforce(mass: f32) -> Vector2<f32> {
+//     let gravity_generator = ObjectForceGenerator::new(10., vector![0., 1.]);
+//     mass * gravity_generator.force()
+// }
 
 pub fn calc_acceleration(force: &Vector2<f32>, mass: f32) -> Vector2<f32> {
     force / mass
